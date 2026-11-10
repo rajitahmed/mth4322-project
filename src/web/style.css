@@ -101,3 +101,9 @@ input {
 .result.not-possible {
   color: var(--red);
 }
+
+.layers {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}

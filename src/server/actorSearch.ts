@@ -27,6 +27,16 @@ export function createActorSearch(names: string[], movieCounts: ArrayLike<number
   };
 }
 
+/**
+ * The same matching rule as the autocomplete, for filtering a short list of
+ * Actors by name: true when a word of the name starts with the query. An empty
+ * query matches every name.
+ */
+export function nameMatcher(query: string): (name: string) => boolean {
+  const prefix = normalize(query);
+  return (name) => wordStarts(normalize(name)).some((start) => start.startsWith(prefix));
+}
+
 /** Lowercase, accents removed, runs of spaces collapsed. */
 function normalize(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();

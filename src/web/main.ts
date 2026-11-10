@@ -1,6 +1,7 @@
 import { createActorField } from "./actorField";
-import { findLargestPath, findPath, searchActors } from "./api";
+import { findChainToCenter, findLargestPath, findLayers, findPath, searchActors } from "./api";
 import { createPathPanel } from "./pathPanel";
+import { createSixDegreesPanel } from "./sixDegreesPanel";
 import { createTabs } from "./tabs";
 
 /** One tab's panel: its row of actor fields. */
@@ -21,6 +22,6 @@ document.body.append(
   createTabs([
     { name: "largest path", panel: createPathPanel(searchActors, findPath, findLargestPath) },
     { name: "shortest cycle", panel: panel("actor 1", "actor 2", "actor 3") },
-    { name: "six degrees of bacon", panel: panel("center") },
+    { name: "six degrees of bacon", panel: createSixDegreesPanel(searchActors, findLayers, findChainToCenter) },
   ]),
 );

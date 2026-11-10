@@ -1,5 +1,7 @@
 import type { FoundPath, ShortestPath } from "../shared/types";
 import { createActorField, type SearchActors } from "./actorField";
+import { button } from "./button";
+import { chainText } from "./chainText";
 
 export type FindPath = (a: string, b: string) => Promise<ShortestPath>;
 export type FindLargestPath = () => Promise<FoundPath>;
@@ -7,8 +9,7 @@ export type FindLargestPath = () => Promise<FoundPath>;
 /** The result line: the Distance and the chain, or why there is none. */
 export function pathLine(path: ShortestPath): string {
   if (!path.found) return "no path: these actors share no chain of movies";
-  const chain = path.actors.flatMap((actor, i) => (i === 0 ? [actor.name] : [path.movies[i - 1]!.title, actor.name]));
-  return `distance ${path.distance}: ${chain.join(" — ")}`;
+  return `distance ${path.distance}: ${chainText(path)}`;
 }
 
 /** Tab 1: `[largest path]` (no input), the optional two Actor fields with `[enter]`, and the result line. */
@@ -40,11 +41,5 @@ export function createPathPanel(
     const actorB = b.selected();
     if (actorA && actorB) show(() => findPath(actorA.id, actorB.id));
   });
-  return element;
-}
-
-function button(text: string): HTMLButtonElement {
-  const element = document.createElement("button");
-  element.textContent = text;
   return element;
 }

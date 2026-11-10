@@ -1,6 +1,16 @@
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
-import { DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT, type Operations, UnknownActorError } from "./operations";
+import {
+  DEFAULT_PAGE_SIZE,
+  DEFAULT_SEARCH_LIMIT,
+  MAX_PAGE_SIZE,
+  MAX_SEARCH_LIMIT,
+  type Operations,
+  UnknownActorError,
+} from "./operations";
+
+/** The optional Center id every Six Degrees route takes (the default Center when missing). */
+const centerSchema = { type: "string" } as const;
 
 /** The HTTP API over the operations module, plus the built web app when webDir is given. */
 export function buildApp(operations: Operations, webDir?: string) {
@@ -42,6 +52,40 @@ export function buildApp(operations: Operations, webDir?: string) {
   );
 
   app.get("/api/largest-path", async () => operations.largestPath());
+
+  app.get<{ Querystring: { center?: string } }>(
+    "/api/six-degrees",
+    { schema: { querystring: { type: "object", properties: { center: centerSchema } } } },
+    async (request) => operations.layerSummary(request.query.center),
+  );
+
+  app.get<{ Querystring: { center?: string; actor: string } }>(
+    "/api/six-degrees/chain",
+    {
+      schema: {
+        querystring: { type: "object", required: ["actor"], properties: { center: centerSchema, actor: { type: "string" } } },
+      },
+    },
+    async (request) => operations.chainToCenter(request.query.center, request.query.actor),
+  );
+
+  app.get<{ Querystring: { center?: string; q: string; offset: number; limit: number } }>(
+    "/api/six-degrees/unlinked",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          properties: {
+            center: centerSchema,
+            q: { type: "string", default: "" },
+            offset: { type: "integer", minimum: 0, default: 0 },
+            limit: { type: "integer", minimum: 1, maximum: MAX_PAGE_SIZE, default: DEFAULT_PAGE_SIZE },
+          },
+        },
+      },
+    },
+    async ({ query }) => operations.unlinked(query.center, query.q, query.offset, query.limit),
+  );
 
   if (webDir) app.register(fastifyStatic, { root: webDir });
   return app;

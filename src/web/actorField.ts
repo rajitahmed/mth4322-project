@@ -6,6 +6,8 @@ export interface ActorField {
   element: HTMLElement;
   /** The Actor picked from the list, or null. Typed text alone never counts. */
   selected(): ActorSummary | null;
+  /** Fills the field as if this Actor had been picked (a default value). */
+  set(actor: ActorSummary): void;
 }
 
 /** Same-name Actors are told apart by birth year. */
@@ -86,5 +88,5 @@ export function createActorField(label: string, search: SearchActors): ActorFiel
     show([]);
   });
 
-  return { element, selected: () => picked };
+  return { element, selected: () => picked, set: pick };
 }

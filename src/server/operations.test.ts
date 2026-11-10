@@ -1,12 +1,31 @@
 import { describe, expect, it } from "vitest";
 import { loadDataset } from "./dataset";
 import type { Dataset } from "./dataset";
-import type { ShortestPath } from "../shared/types";
+import type { ChainToCenter, ShortestPath } from "../shared/types";
 import { actorsIn, buildGraph } from "./graph";
 import { createOperations, UnknownActorError } from "./operations";
 
 const graph = buildGraph(loadDataset("data/tiny"));
 const operations = createOperations(graph);
+
+const titleOf = new Map(graph.movies.map((m) => [m.id, m.title]));
+const castOf = new Map(graph.movies.map((m, i) => [m.id, new Set(Array.from(actorsIn(graph, i), (a) => graph.actors[a]!.id))]));
+
+/** The chain starts at a, ends at b, has `distance` Links, and every Link is a Movie both Actors are in. */
+function expectValidChain(result: ShortestPath | ChainToCenter, a: string, b: string) {
+  if (!result.found) throw new Error("expected a path");
+  const { distance, actors, movies } = result;
+  expect(actors).toHaveLength(distance + 1);
+  expect(movies).toHaveLength(distance);
+  expect(actors[0]!.id).toBe(a);
+  expect(actors.at(-1)!.id).toBe(b);
+  expect(new Set(actors.map((x) => x.id)).size).toBe(actors.length);
+  movies.forEach((movie, i) => {
+    expect(titleOf.get(movie.id)).toBe(movie.title);
+    expect(castOf.get(movie.id)).toContain(actors[i]!.id);
+    expect(castOf.get(movie.id)).toContain(actors[i + 1]!.id);
+  });
+}
 
 describe("searchActors", () => {
   it("finds Actors by the start of any word in their name", () => {
@@ -40,25 +59,6 @@ describe("searchActors", () => {
 });
 
 describe("shortestPath", () => {
-  const titleOf = new Map(graph.movies.map((m) => [m.id, m.title]));
-  const castOf = new Map(graph.movies.map((m, i) => [m.id, new Set(Array.from(actorsIn(graph, i), (a) => graph.actors[a]!.id))]));
-
-  /** The chain starts at a, ends at b, has `distance` Links, and every Link is a Movie both Actors are in. */
-  function expectValidChain(result: ShortestPath, a: string, b: string) {
-    if (!result.found) throw new Error("expected a path");
-    const { distance, actors, movies } = result;
-    expect(actors).toHaveLength(distance + 1);
-    expect(movies).toHaveLength(distance);
-    expect(actors[0]!.id).toBe(a);
-    expect(actors.at(-1)!.id).toBe(b);
-    expect(new Set(actors.map((x) => x.id)).size).toBe(actors.length);
-    movies.forEach((movie, i) => {
-      expect(titleOf.get(movie.id)).toBe(movie.title);
-      expect(castOf.get(movie.id)).toContain(actors[i]!.id);
-      expect(castOf.get(movie.id)).toContain(actors[i + 1]!.id);
-    });
-  }
-
   it("finds Kevin Bacon → Dev Ennis at Distance 4 (paper answer)", () => {
     const result = operations.shortestPath("nm01", "nm05");
     expect(result.found && result.distance).toBe(4);
@@ -176,5 +176,91 @@ describe("largestPath", () => {
     const result = createOperations(buildGraph(dataset)).largestPath();
     expect(result.distance).toBe(3);
     expect([result.actors[0]!.id, result.actors.at(-1)!.id]).toEqual(["y0", "y3"]);
+  });
+});
+
+describe("six degrees", () => {
+  const idsOf = (actors: { id: string }[]) => actors.map((a) => a.id);
+
+  it("finds the tiny dataset's Layers around Kevin Bacon (paper answer)", () => {
+    const { center, layers } = operations.sixDegrees("nm01");
+    expect(center.id).toBe("nm01");
+    expect(layers.map(idsOf)).toEqual([
+      ["nm01"],
+      ["nm02", "nm12", "nm13"],
+      ["nm03", "nm07", "nm09", "nm14"],
+      ["nm04", "nm06", "nm10", "nm11"],
+      ["nm05"],
+      ["nm08"],
+    ]);
+  });
+
+  it("puts Actors outside the Center's Group in the can't-be-linked set and in no Layer", () => {
+    const { layers, unlinked } = operations.sixDegrees("nm01");
+    expect(idsOf(unlinked)).toEqual(["nm15", "nm16", "nm17"]);
+    const layered = new Set(layers.flatMap(idsOf));
+    for (const id of idsOf(unlinked)) expect(layered).not.toContain(id);
+  });
+
+  it("defaults to Kevin Bacon", () => {
+    expect(operations.sixDegrees().center.id).toBe("nm01");
+    expect(operations.layerSummary().center.id).toBe("nm01");
+  });
+
+  it("works around any Center", () => {
+    const { layers, unlinked } = operations.sixDegrees("nm16");
+    expect(layers.map(idsOf)).toEqual([["nm16"], ["nm15", "nm17"]]);
+    expect(unlinked).toHaveLength(14);
+  });
+
+  it("summarises the Layer counts and the can't-be-linked count", () => {
+    expect(operations.layerSummary("nm01")).toEqual({
+      center: { id: "nm01", name: "Kevin Bacon", birthYear: 1958 },
+      layerCounts: [1, 3, 4, 4, 1, 1],
+      unlinkedCount: 3,
+    });
+  });
+
+  it("gives a valid shortest chain whose length is the Actor's Layer number", () => {
+    const { layers } = operations.sixDegrees("nm01");
+    layers.forEach((layer, distance) => {
+      for (const actor of layer) {
+        const chain = operations.chainToCenter("nm01", actor.id);
+        expect(chain.found && chain.distance).toBe(distance);
+        expectValidChain(chain, "nm01", actor.id);
+      }
+    });
+  });
+
+  it("picks the lowest-id shortest chain (Xia Ortiz through Sid Moss)", () => {
+    const chain = operations.chainToCenter("nm01", "nm14");
+    expect(chain.found && chain.movies.map((m) => m.title)).toEqual(["Low Tide", "Low Tide 2"]);
+  });
+
+  it("finds no chain for an Actor who can't be linked", () => {
+    expect(operations.chainToCenter("nm01", "nm17")).toEqual({ found: false });
+  });
+
+  it("pages the can't-be-linked list in id order and searches it by name", () => {
+    expect(operations.unlinked("nm01", "", 0, 2)).toEqual({
+      total: 3,
+      actors: [
+        { id: "nm15", name: "Sam Lee", birthYear: 1988 },
+        { id: "nm16", name: "Gus Price", birthYear: 1960 },
+      ],
+    });
+    expect(idsOf(operations.unlinked("nm01", "", 2, 2).actors)).toEqual(["nm17"]);
+    // "sam" also matches Sam Lee 1970, who is linked, so only Sam Lee 1988 is listed.
+    expect(operations.unlinked("nm01", "SAM", 0, 10)).toEqual({ total: 1, actors: [{ id: "nm15", name: "Sam Lee", birthYear: 1988 }] });
+  });
+
+  it("rejects an unknown Center or Actor", () => {
+    expect(() => operations.layerSummary("nm99")).toThrow(UnknownActorError);
+    expect(() => operations.chainToCenter("nm01", "nm99")).toThrow(UnknownActorError);
+  });
+
+  it("falls back to the first Actor when there is no Kevin Bacon", () => {
+    const other = createOperations(buildGraph(datasetOf(["x0", "x1"], [["x0", "x1"]])));
+    expect(other.layerSummary()).toMatchObject({ center: { id: "x0" }, layerCounts: [1, 1] });
   });
 });

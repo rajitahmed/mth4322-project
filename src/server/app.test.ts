@@ -64,3 +64,52 @@ describe("GET /api/largest-path", () => {
     expect(operations.largestPath()).toBe(operations.largestPath());
   });
 });
+
+describe("GET /api/six-degrees", () => {
+  it("returns the Layer counts and the can't-be-linked count around Kevin Bacon by default", async () => {
+    const response = await app.inject({ url: "/api/six-degrees" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      center: { id: "nm01", name: "Kevin Bacon", birthYear: 1958 },
+      layerCounts: [1, 3, 4, 4, 1, 1],
+      unlinkedCount: 3,
+    });
+  });
+
+  it("accepts any Center, and answers 404 for an unknown one", async () => {
+    const response = await app.inject({ url: "/api/six-degrees?center=nm16" });
+    expect(response.json()).toMatchObject({ layerCounts: [1, 2], unlinkedCount: 14 });
+    expect((await app.inject({ url: "/api/six-degrees?center=nm99" })).statusCode).toBe(404);
+  });
+});
+
+describe("GET /api/six-degrees/chain", () => {
+  it("returns the chain for one Actor back to the Center", async () => {
+    const response = await app.inject({ url: "/api/six-degrees/chain?center=nm01&actor=nm14" });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body).toMatchObject({ found: true, distance: 2 });
+    expect(body.movies.map((m: { title: string }) => m.title)).toEqual(["Low Tide", "Low Tide 2"]);
+  });
+
+  it("returns no chain for an Actor who can't be linked, 400 without an Actor, 404 for an unknown one", async () => {
+    expect((await app.inject({ url: "/api/six-degrees/chain?actor=nm17" })).json()).toEqual({ found: false });
+    expect((await app.inject({ url: "/api/six-degrees/chain" })).statusCode).toBe(400);
+    expect((await app.inject({ url: "/api/six-degrees/chain?actor=nm99" })).statusCode).toBe(404);
+  });
+});
+
+describe("GET /api/six-degrees/unlinked", () => {
+  it("returns one page of the can't-be-linked list, searchable by name", async () => {
+    const page = await app.inject({ url: "/api/six-degrees/unlinked?center=nm01&offset=1&limit=1" });
+    expect(page.statusCode).toBe(200);
+    expect(page.json()).toEqual({ total: 3, actors: [{ id: "nm16", name: "Gus Price", birthYear: 1960 }] });
+    const search = await app.inject({ url: "/api/six-degrees/unlinked?q=gia" });
+    expect(search.json()).toMatchObject({ total: 1, actors: [{ id: "nm17" }] });
+  });
+
+  it("rejects a bad page", async () => {
+    expect((await app.inject({ url: "/api/six-degrees/unlinked?limit=0" })).statusCode).toBe(400);
+    expect((await app.inject({ url: "/api/six-degrees/unlinked?offset=-1" })).statusCode).toBe(400);
+  });
+});

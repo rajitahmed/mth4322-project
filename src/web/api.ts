@@ -1,4 +1,4 @@
-import type { ActorSummary, FoundPath, ShortestPath } from "../shared/types";
+import type { ActorSummary, ChainToCenter, FoundPath, LayerSummary, ShortestPath } from "../shared/types";
 
 export async function searchActors(query: string): Promise<ActorSummary[]> {
   const response = await fetch(`/api/actors?q=${encodeURIComponent(query)}`);
@@ -15,5 +15,21 @@ export async function findPath(a: string, b: string): Promise<ShortestPath> {
 export async function findLargestPath(): Promise<FoundPath> {
   const response = await fetch("/api/largest-path");
   if (!response.ok) throw new Error(`Largest path failed: ${response.status}`);
+  return response.json();
+}
+
+/** The Layer counts around a Center; the default Center (Kevin Bacon) when none is given. */
+export async function findLayers(center?: string): Promise<LayerSummary> {
+  const query = center === undefined ? "" : `?center=${encodeURIComponent(center)}`;
+  const response = await fetch(`/api/six-degrees${query}`);
+  if (!response.ok) throw new Error(`Layers failed: ${response.status}`);
+  return response.json();
+}
+
+export async function findChainToCenter(center: string, actor: string): Promise<ChainToCenter> {
+  const response = await fetch(
+    `/api/six-degrees/chain?center=${encodeURIComponent(center)}&actor=${encodeURIComponent(actor)}`,
+  );
+  if (!response.ok) throw new Error(`Chain failed: ${response.status}`);
   return response.json();
 }

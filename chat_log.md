@@ -324,3 +324,57 @@ A chronological log of how this application is being built. There is one entry p
   - **Standards:** **Fixed** "diameter" (on CONTEXT.md's avoid list) in code and test names, with `groupDiameter` renamed to `groupLargestPath`. Also fixed "all-sources" wording in the tests, and the confusing `largest`/`largestReplay` names (now `farthestPair`/`farthestChain`; the panel's button is `largestButton`). The two `{ distance: -1, … }` copies became one `NO_PAIR`. D5 now points to D17. Left as is: `searchLayers` uses "Layer" for any start Actor (D16 already does this), `linkCount` passed through to `mostLinked`, the small Dataset builders in two test files (different shapes), and the `[largest path]` button sharing the tab's name (the brief puts the no-input answer on this tab).
 - **Verified:** `npm run typecheck` clean, `npm test` 64 tests all pass, and `npm run build` OK.
 - **Committed** to `main`.
+
+---
+
+## 2026-11-10: Ticket #5 implemented (tab 3: Six Degrees Layers and shortest-link chain)
+
+- **Asked:** `/implement` ticket #5. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Read:** issue #5, `DECISIONS.md` D10, D12, D13, D16, D17, `algorithms.md` §6, `data/tiny/ANSWERS.md` (operation 3), `design.md` (tab 3), `CONTEXT.md`, and the existing BFS, operations, API and tab 1 code.
+- **Built (tests first, at the operations seam, then the API, then the tab):**
+  - `src/server/sixDegrees.ts`: `layersAround(graph, center)` runs the existing `searchLayers` (BFS is still written once). It keeps the search, the Layers, and the Actors it never reached (the can't-be-linked set).
+  - `src/server/recentCache.ts`: an 8-entry least-recently-used cache built on a `Map`.
+  - Operations:
+    - `sixDegrees(center)` returns the full answer: every Layer's Actors and the can't-be-linked Actors.
+    - `layerSummary(center)` returns the Layer counts and the can't-be-linked count.
+    - `chainToCenter(center, actor)` returns the BFS parent chain, or `{ found: false }`.
+    - `unlinked(center, q, offset, limit)` returns a paged, searchable list.
+    - The default Center is the Actor named exactly "Kevin Bacon", computed at startup. Other Centers go through the cache.
+  - Shared `Chain` type (`FoundPath` extends it) and `IndexChain`. One `chainOf` mapping and one `chainText` serve both tabs. `actorSearch.ts` exports `nameMatcher`, so the list search uses the autocomplete's rule.
+  - Endpoints: `GET /api/six-degrees`, `/api/six-degrees/chain`, `/api/six-degrees/unlinked`. `center` is optional (Kevin Bacon), an unknown id gives 404, and a missing Actor or a bad page gives 400.
+  - Tab 3: center field (starts at Kevin Bacon), actor field, `[enter]`. It lists `layer i: count` and `can't be linked: n`. The result line shows `layer 2: Kevin Bacon — Low Tide — Sid Moss — Low Tide 2 — Xia Ortiz`, or a red `can't be linked: …`.
+  - `CONTEXT.md`: new term "Can't be linked".
+- **Tests:**
+  - Operations:
+    - The paper Layer sets around Kevin Bacon match.
+    - Group 2 is can't-be-linked and in no Layer.
+    - Every Actor's chain is valid and as long as their Layer number.
+    - Xia's chain goes through Sid (lowest ids).
+    - Another Center works, and so does the default.
+    - The summary's counts are right.
+    - Paging and name search of the list work.
+    - Unknown ids are rejected.
+    - A dataset with no Kevin Bacon falls back to its first Actor.
+  - Cache: computes a key once and drops the least recently used.
+  - API: all three endpoints, plus 404/400.
+  - Panel:
+    - It starts around Kevin Bacon with the counts.
+    - It shows a chain, and a red can't-be-linked line.
+    - It moves to the Center in the field before showing a chain, and does not reload an unchanged Center.
+    - A failed load clears the counts, and a failed chain says "search failed".
+    - It ignores a late, older answer.
+    - It does nothing with no Actor picked.
+- **Real data check:**
+  - Kevin Bacon's Layers are 1, 320, 13,060, 51,640, 39,764, 8,067, 786, 140 (the whole 113,778-Actor main Group, at most 7 Links away). 5,680 Actors can't be linked.
+  - A new Center takes ~37 ms, a cached one ~0.02 ms, and a chain ~0.25 ms (Kevin Bacon → Leonardo DiCaprio = 2, via Brad Pitt).
+  - The summary payload is 141 bytes. Startup is ~16 s (was ~14 s).
+- **Decision recorded: D18.** It covers one full BFS per Center, the BFS parent chain, the default Center by exact name, the recent cache, the answer kept separate from the payload, the three endpoints, the list search reusing the autocomplete's rule, the shared `Chain` type, the tab's single `[enter]`, and the measurements.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Standards:**
+    - Fixed: `button` and `chainText` moved out of `pathPanel.ts` into their own modules (tab 1's panel was becoming a helper module); one `IndexChain` type instead of three spelled-out shapes; the one-line `chainToCenter` wrapper in `sixDegrees.ts` inlined into operations; the schema constant renamed to `centerSchema`; `FindChain` renamed to `FindChainToCenter`; "Can't be linked" added to `CONTEXT.md`.
+    - Left as is: the `unlinked` endpoint and `sixDegrees()` (both required by the ticket's criteria); "ring" used for the visual, as in `design.md`.
+  - **Spec:**
+    - Every criterion met. Fixed: a chain could start from a Center the field no longer showed, so `[set center]` and `[show chain]` became one `[enter]` that loads the field's Center first; a failed Center load now clears the old counts; late, older answers are ignored (checked: removing the guard fails the new test); the default Center needs an exact name match, not a word-prefix match.
+    - Left as is: no UI for the can't-be-linked list yet (the ticket asks only for the count); ring samples wait for the rings ticket (D18).
+- **Verified:** `npm run typecheck` clean; `npm test` 92 tests, all pass; `npm run build` OK.
+- **Committed** to `main`.

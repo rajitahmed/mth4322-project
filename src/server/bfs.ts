@@ -49,8 +49,14 @@ export function expandFrontier(graph: Graph, search: Search, frontier: Int32Arra
   return Int32Array.from(next).sort();
 }
 
+/** A chain by index: `movies[i]` links `actors[i]` and `actors[i + 1]`. */
+export interface IndexChain {
+  actors: number[];
+  movies: number[];
+}
+
 /** The chain from the start Actor to a reached Actor: Actors and the Movies linking them. */
-export function chainTo(search: Search, actor: number): { actors: number[]; movies: number[] } {
+export function chainTo(search: Search, actor: number): IndexChain {
   const actors = [actor];
   const movies: number[] = [];
   for (let a = actor; search.parentActor[a] !== -1; a = search.parentActor[a]!) {

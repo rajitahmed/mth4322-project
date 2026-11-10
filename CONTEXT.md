@@ -40,6 +40,10 @@ _Avoid_: Source, root, hub
 All Actors at the same Distance from the Center. Layers are the same in both link modes.
 _Avoid_: Ring, level, degree
 
+**Can't be linked**:
+An Actor with no chain of Links to the Center, because they are in another Group. They are in no Layer.
+_Avoid_: Unreachable, disconnected
+
 **Largest finite shortest path**:
 The largest Distance between any two Actors in the same Group, across all Groups.
 _Avoid_: Diameter, longest path
