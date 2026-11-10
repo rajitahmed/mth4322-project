@@ -271,3 +271,10 @@ A chronological log of how this application is being built. There is one entry p
 - **Real run:** downloaded the four files (~1.3 GB, about 7 min), then filtered them (about 8 min). Output: **29,705 Movies, 119,458 Actors, 271,435 credits**. `loadDataset` and `buildGraph` load it in 0.9 s and find 846 Groups; Kevin Bacon is `nm0000102`; every Movie has a year, rating ≥ 6.1 and votes ≥ 1,100. The CSV files were **not committed**: ticket #13 does that.
 - **Verified:** `npm run typecheck` clean; `npm test` 37 tests, all pass.
 - **Committed** to `main`.
+
+---
+
+## 2026-11-10: Pushed ticket #2 and closed it
+
+- **Asked:** push the work and close ticket #2.
+- **Done:** pushed `main` (`b779b39`) to GitHub and closed issue #2 with a comment linking the commit, the real-run counts and D15.
