@@ -1,5 +1,6 @@
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
+import { CHAIN_MODES, type ChainMode } from "../shared/types";
 import {
   DEFAULT_PAGE_SIZE,
   DEFAULT_SEARCH_LIMIT,
@@ -59,14 +60,22 @@ export function buildApp(operations: Operations, webDir?: string) {
     async (request) => operations.layerSummary(request.query.center),
   );
 
-  app.get<{ Querystring: { center?: string; actor: string } }>(
+  app.get<{ Querystring: { center?: string; actor: string; mode: ChainMode } }>(
     "/api/six-degrees/chain",
     {
       schema: {
-        querystring: { type: "object", required: ["actor"], properties: { center: centerSchema, actor: { type: "string" } } },
+        querystring: {
+          type: "object",
+          required: ["actor"],
+          properties: {
+            center: centerSchema,
+            actor: { type: "string" },
+            mode: { type: "string", enum: CHAIN_MODES, default: "shortest" },
+          },
+        },
       },
     },
-    async (request) => operations.chainToCenter(request.query.center, request.query.actor),
+    async ({ query }) => operations.chainToCenter(query.center, query.actor, query.mode),
   );
 
   app.get<{ Querystring: { center?: string; q: string; offset: number; limit: number } }>(

@@ -1,6 +1,7 @@
 import type {
   ActorSummary,
   Chain,
+  ChainMode,
   ChainToCenter,
   FoundPath,
   LayerSummary,
@@ -14,7 +15,7 @@ import { type Graph, moviesOf } from "./graph";
 import { largestPath } from "./largestPath";
 import { recentCache } from "./recentCache";
 import { shortestPath } from "./shortestPath";
-import { type CenterLayers, layersAround } from "./sixDegrees";
+import { type CenterLayers, chainRatings, layersAround } from "./sixDegrees";
 
 export const DEFAULT_SEARCH_LIMIT = 10;
 export const MAX_SEARCH_LIMIT = 50;
@@ -132,12 +133,17 @@ export function createOperations(graph: Graph) {
       };
     },
 
-    /** The shortest-link chain (BFS parents) from the Center to one Actor; its Distance is the Actor's Layer. */
-    chainToCenter(centerId: string | undefined, actorId: string): ChainToCenter {
-      const { search } = centerOf(centerId).around;
+    /**
+     * The chain from the Center to one Actor, with its total and average rating:
+     * the shortest-link chain (BFS parents) or the best-rated one (D11). Its
+     * Distance is the Actor's Layer in both modes.
+     */
+    chainToCenter(centerId: string | undefined, actorId: string, mode: ChainMode = "shortest"): ChainToCenter {
+      const { search, bestRatedParents } = centerOf(centerId).around;
       const actor = indexOf(actorId);
       if (search.distance[actor] === -1) return { found: false };
-      return { found: true, ...chainOf(chainTo(search, actor)) };
+      const chain = chainTo(mode === "shortest" ? search : bestRatedParents, actor);
+      return { found: true, ...chainOf(chain), ...chainRatings(graph, chain) };
     },
 
     /** One page of the Actors who can't be linked to the Center, in id order, filtered by name. */

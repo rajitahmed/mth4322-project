@@ -1,4 +1,4 @@
-import type { ActorSummary, ChainToCenter, FoundPath, LayerSummary, ShortestPath } from "../shared/types";
+import type { ActorSummary, ChainMode, ChainToCenter, FoundPath, LayerSummary, ShortestPath } from "../shared/types";
 
 export async function searchActors(query: string): Promise<ActorSummary[]> {
   const response = await fetch(`/api/actors?q=${encodeURIComponent(query)}`);
@@ -26,9 +26,9 @@ export async function findLayers(center?: string): Promise<LayerSummary> {
   return response.json();
 }
 
-export async function findChainToCenter(center: string, actor: string): Promise<ChainToCenter> {
+export async function findChainToCenter(center: string, actor: string, mode: ChainMode): Promise<ChainToCenter> {
   const response = await fetch(
-    `/api/six-degrees/chain?center=${encodeURIComponent(center)}&actor=${encodeURIComponent(actor)}`,
+    `/api/six-degrees/chain?center=${encodeURIComponent(center)}&actor=${encodeURIComponent(actor)}&mode=${mode}`,
   );
   if (!response.ok) throw new Error(`Chain failed: ${response.status}`);
   return response.json();

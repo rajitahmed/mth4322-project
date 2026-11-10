@@ -378,3 +378,49 @@ A chronological log of how this application is being built. There is one entry p
     - Left as is: no UI for the can't-be-linked list yet (the ticket asks only for the count); ring samples wait for the rings ticket (D18).
 - **Verified:** `npm run typecheck` clean; `npm test` 92 tests, all pass; `npm run build` OK.
 - **Committed** to `main`.
+
+---
+
+## 2026-11-10: Ticket #6 implemented (tab 3: best-rated chain and Center caching)
+
+- **Asked:** `/implement` ticket #6. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Explored:** Ticket #6 (best-rated chain by DP on the shortest-path DAG, the D12 caching, and a tab toggle), D11, D12, D18, `algorithms.md` §6.3–6.4, and the tiny dataset's paper answers. The caching criterion (Kevin Bacon at startup, 8 recent Centers, one constant) was already met by ticket #5, so I checked it still holds and left it unchanged.
+- **Tests first (TDD), red before code:**
+  - Operations:
+    - Xia Ortiz's best-rated chain goes through Sue Nash (High Noon Redux, High Noon Redux 2: 17.3, average 8.65). It is valid, and it differs from the shortest chain through Sid Moss (12.5, average 6.25) in the same Layer.
+    - Dev Ennis's two chains are the same (27.4).
+    - Every Actor's best-rated chain is valid and as long as their Layer.
+    - The Center has rating 0 and no average.
+    - An Actor who can't be linked has no chain.
+    - Ties go to the lowest Actor, then the lowest Movie.
+  - API: `mode=best-rated`, and 400 for an unknown mode.
+  - Panel:
+    - The toggle switches the chain without reloading the Layers, and switches back.
+    - The mode is used by the next `[enter]`.
+    - Nothing is fetched when no chain is shown.
+    - The Center's own chain has no ratings.
+- **Built:**
+  - **DP** (`bestRatedChoices` in `sixDegrees.ts`): Layer by Layer, Movies first then Actors, over ratings in whole tenths. It runs right after the Center's BFS and is cached with it.
+  - **Chains:** `chainTo` takes any `Parents`, so both modes share one chain walker. `chainToCenter(center, actor, mode)` returns `totalRating` and `averageRating`.
+  - **API:** `GET /api/six-degrees/chain` takes `mode=shortest|best-rated`.
+  - **Tab 3:** a `[shortest link] [best-rated link]` toggle (`aria-pressed`, the chosen one in `--accent`). The result line ends with `(rating 17.3, average 8.65)`.
+- **Real data check:**
+  - A new Center takes ~43 ms with the BFS alone and ~72 ms with the BFS plus the DP.
+  - Kevin Bacon → Leonardo DiCaprio:
+    - shortest: via Brad Pitt, 15.1 (average 7.55);
+    - best-rated: via Jack Nicholson (A Few Good Men, The Departed), 16.3 (average 8.15).
+  - Of 2,000 Layer-3 Actors, 1,459 have a better best-rated chain, and none has a worse one.
+- **Decision recorded: D19.** It covers the DP as coded, why it runs after the BFS rather than inside `expandFrontier`, ratings in tenths, the tie rule, the one chain walker, ratings in both modes, the API mode, the toggle (and why it doesn't prefetch both chains), and the measurements.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Standards:** No hard violations. I fixed the 5 judgement calls:
+    - The mode list was written twice. It is now one `CHAIN_MODES` constant in `shared/types.ts`.
+    - `chainTo`'s argument was renamed to `parents`.
+    - Rating arithmetic moved into one `chainRatings` in `sixDegrees.ts`.
+    - The toggle's tuple array, read by position, became `{ mode, element }` objects.
+    - `bestRated` was renamed to `bestRatedParents`.
+  - **Spec:** Every criterion is met, and the DP and tie-breaking were checked correct. Left as is, with the reasons in D19:
+    - The DP runs as a second loop after the BFS. It is still the same per-Center computation at the same cost, and it keeps the one BFS free of rating code.
+    - Ratings are shown in both modes.
+    - "Lowest id" means the lowest row, as D13 defines it.
+- **Verified:** `npm run typecheck` is clean. `npm test` runs 103 tests and all pass. `npm run build` is OK.
+- **Committed** to `main`.

@@ -92,6 +92,14 @@ describe("GET /api/six-degrees/chain", () => {
     expect(body.movies.map((m: { title: string }) => m.title)).toEqual(["Low Tide", "Low Tide 2"]);
   });
 
+  it("returns the best-rated chain with its ratings when asked, and 400 for an unknown mode", async () => {
+    const response = await app.inject({ url: "/api/six-degrees/chain?actor=nm14&mode=best-rated" });
+    const body = response.json();
+    expect(body).toMatchObject({ found: true, distance: 2, totalRating: 17.3, averageRating: 8.65 });
+    expect(body.movies.map((m: { title: string }) => m.title)).toEqual(["High Noon Redux", "High Noon Redux 2"]);
+    expect((await app.inject({ url: "/api/six-degrees/chain?actor=nm14&mode=worst" })).statusCode).toBe(400);
+  });
+
   it("returns no chain for an Actor who can't be linked, 400 without an Actor, 404 for an unknown one", async () => {
     expect((await app.inject({ url: "/api/six-degrees/chain?actor=nm17" })).json()).toEqual({ found: false });
     expect((await app.inject({ url: "/api/six-degrees/chain" })).statusCode).toBe(400);

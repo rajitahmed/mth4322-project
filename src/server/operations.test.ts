@@ -241,6 +241,52 @@ describe("six degrees", () => {
     expect(operations.chainToCenter("nm01", "nm17")).toEqual({ found: false });
   });
 
+  it("gives the shortest chain's ratings: Xia Ortiz through Sid Moss is 6.2 + 6.3", () => {
+    expect(operations.chainToCenter("nm01", "nm14")).toMatchObject({ distance: 2, totalRating: 12.5, averageRating: 6.25 });
+  });
+
+  it("picks a different best-rated chain for Xia Ortiz in the same Layer (paper answer: 17.3, average 8.65)", () => {
+    const shortest = operations.chainToCenter("nm01", "nm14", "shortest");
+    const best = operations.chainToCenter("nm01", "nm14", "best-rated");
+    expectValidChain(best, "nm01", "nm14");
+    expect(best).toMatchObject({ distance: 2, totalRating: 17.3, averageRating: 8.65 });
+    expect(best.found && best.movies.map((m) => m.title)).toEqual(["High Noon Redux", "High Noon Redux 2"]);
+    expect(best.found && best.movies).not.toEqual(shortest.found && shortest.movies);
+  });
+
+  it("keeps Dev Ennis's chain when the lowest-id chain is also the best-rated one (paper answer: 27.4)", () => {
+    const best = operations.chainToCenter("nm01", "nm05", "best-rated");
+    expect(best).toMatchObject({ distance: 4, totalRating: 27.4 });
+    expect(best).toEqual(operations.chainToCenter("nm01", "nm05", "shortest"));
+  });
+
+  it("gives a valid best-rated chain whose length is the Actor's Layer number, for every Actor", () => {
+    const { layers } = operations.sixDegrees("nm01");
+    layers.forEach((layer, distance) => {
+      for (const actor of layer) {
+        const chain = operations.chainToCenter("nm01", actor.id, "best-rated");
+        expect(chain.found && chain.distance).toBe(distance);
+        expectValidChain(chain, "nm01", actor.id);
+      }
+    });
+  });
+
+  it("gives the Center itself a chain of no Movies, rating 0 and no average", () => {
+    expect(operations.chainToCenter("nm01", "nm01", "best-rated")).toMatchObject({ distance: 0, totalRating: 0, averageRating: null });
+  });
+
+  it("finds no best-rated chain for an Actor who can't be linked", () => {
+    expect(operations.chainToCenter("nm01", "nm17", "best-rated")).toEqual({ found: false });
+  });
+
+  it("breaks best-rated ties by the lowest Actor id, then the lowest Movie id", () => {
+    // x3 reaches Layer 1 through x1 (Movie 3) or x2 (Movie 2), all rated 7: the lowest Actor wins, not the lowest Movie.
+    const tied = createOperations(buildGraph(datasetOf(["x0", "x1", "x2", "x3"], [["x0", "x1"], ["x0", "x2"], ["x2", "x3"], ["x1", "x3"], ["x1", "x3"]])));
+    const chain = tied.chainToCenter("x0", "x3", "best-rated");
+    expect(chain.found && chain.actors.map((a) => a.id)).toEqual(["x0", "x1", "x3"]);
+    expect(chain.found && chain.movies.map((m) => m.id)).toEqual(["tt0", "tt3"]);
+  });
+
   it("pages the can't-be-linked list in id order and searches it by name", () => {
     expect(operations.unlinked("nm01", "", 0, 2)).toEqual({
       total: 3,

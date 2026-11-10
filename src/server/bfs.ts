@@ -55,13 +55,19 @@ export interface IndexChain {
   movies: number[];
 }
 
-/** The chain from the start Actor to a reached Actor: Actors and the Movies linking them. */
-export function chainTo(search: Search, actor: number): IndexChain {
+/** For each Actor, the Actor and Movie it was reached through (-1 for the start Actor). */
+export type Parents = Pick<Search, "parentActor" | "parentMovie">;
+
+/**
+ * The chain from the start Actor to a reached Actor: Actors and the Movies
+ * linking them, walked back through any parents (a search's, or the best-rated choices).
+ */
+export function chainTo(parents: Parents, actor: number): IndexChain {
   const actors = [actor];
   const movies: number[] = [];
-  for (let a = actor; search.parentActor[a] !== -1; a = search.parentActor[a]!) {
-    movies.push(search.parentMovie[a]!);
-    actors.push(search.parentActor[a]!);
+  for (let a = actor; parents.parentActor[a] !== -1; a = parents.parentActor[a]!) {
+    movies.push(parents.parentMovie[a]!);
+    actors.push(parents.parentActor[a]!);
   }
   return { actors: actors.reverse(), movies: movies.reverse() };
 }

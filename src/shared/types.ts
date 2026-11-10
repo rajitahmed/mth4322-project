@@ -41,8 +41,18 @@ export interface FoundPath extends Chain {
 /** Shortest path between two Actors, or none when they are in different Groups. */
 export type ShortestPath = FoundPath | { found: false; explored: ExploredLink[] };
 
-/** The chain from the Center to a picked Actor, or none when the Actor can't be linked. */
-export type ChainToCenter = (Chain & { found: true }) | { found: false };
+/** Which chain tab 3 shows: the BFS-parent chain, or the shortest chain with the highest average rating (DECISIONS D11). */
+export const CHAIN_MODES = ["shortest", "best-rated"] as const;
+export type ChainMode = (typeof CHAIN_MODES)[number];
+
+/**
+ * The chain from the Center to a picked Actor, with the sum and average of its
+ * Movies' ratings (no average for the Center itself), or none when the Actor
+ * can't be linked.
+ */
+export type ChainToCenter =
+  | (Chain & { found: true; totalRating: number; averageRating: number | null })
+  | { found: false };
 
 /** What tab 3 shows first: Actors per Layer (Layer 0 is the Center) and how many can't be linked. */
 export interface LayerSummary {

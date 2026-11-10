@@ -41,6 +41,20 @@ input {
   color: var(--accent);
 }
 
+.modes {
+  margin-top: 16px;
+}
+
+.modes button {
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+.modes button[aria-pressed="true"],
+.modes button:hover {
+  color: var(--accent);
+}
+
 .fields {
   display: flex;
   flex-wrap: wrap;
