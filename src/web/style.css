@@ -11,7 +11,12 @@
   color-scheme: dark;
 }
 
+/* One screen, no page scroll (design.md § Layout): the page is a column and the stage takes what is left. */
 body {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100vh;
   margin: 0;
   padding: 16px;
   background: var(--bg);
@@ -29,6 +34,14 @@ input {
   color: inherit;
   background: none;
   border: 0;
+}
+
+.app,
+[role="tabpanel"]:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .tabs button {
@@ -116,8 +129,83 @@ input {
   color: var(--accent);
 }
 
-.result {
+.heading {
+  margin-top: 16px;
+}
+
+.heading h1 {
+  margin: 0;
   font-size: 24px;
+  line-height: 1.2;
+}
+
+.heading p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+
+/* The stage and the report side by side, so the result reads beside the animation (D27). */
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem);
+  gap: 24px;
+  margin-top: 16px;
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+}
+
+.report,
+.unlinked {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.result {
+  margin: 0 0 16px;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+/* The chain as a graph: `@` nodes joined by `|` edges, both green (the answer), names in ink. */
+.chain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chain li {
+  display: flex;
+  gap: 1ch;
+  align-items: baseline;
+  line-height: 1.25;
+}
+
+.chain .glyph {
+  flex: none;
+  width: 1ch;
+  color: var(--green);
+}
+
+.chain-movie {
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+
+.chain-movie .glyph {
+  font-size: 16px;
+}
+
+.chain .dim {
+  font-size: 14px;
+  color: var(--ink-dim);
 }
 
 .result.not-possible {
@@ -195,24 +283,49 @@ input {
   height: 100%;
 }
 
-/* The stage takes the rest of the screen, so nothing scrolls while an animation plays (design.md § Layout). */
-.stage canvas {
-  display: block;
-  width: 100%;
-  height: calc(100vh - 260px);
-  margin-top: 16px;
+/* The stage is framed, with its caption and controls on the frame's top edge, and takes the rest of the screen (design.md § Layout). */
+.stage {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--ink-dim);
 }
 
-/* Tab 3 has a row of buttons above the stage, and a chain's result line often takes two lines. */
-.six-degrees .stage canvas {
-  height: calc(100vh - 340px);
+.stage-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px 24px;
+  padding: 8px 16px;
+  border-bottom: 1px dashed var(--ink-dim);
+}
+
+/* What the algorithm is doing: two lines at most, so the stage below never moves. */
+.caption {
+  flex: 1 1 24rem;
+  margin: 0;
+  min-height: 2.5em;
+  font-size: 14px;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.stage canvas {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-height: 200px;
 }
 
 .stage-controls {
   display: flex;
   justify-content: flex-end;
-  gap: 24px;
-  min-height: 1.4em;
+  gap: 16px;
+  font-size: 14px;
 }
 
 .stage-controls button {

@@ -1,6 +1,6 @@
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
-import { CHAIN_MODES, type ChainMode, MAX_CHOSEN_ACTORS, MIN_CHOSEN_ACTORS } from "../shared/types";
+import { CHAIN_MODES, type ChainMode, MAX_CHOSEN_ACTORS, MAX_RANDOM_ACTORS, MIN_CHOSEN_ACTORS } from "../shared/types";
 import {
   DEFAULT_PAGE_SIZE,
   DEFAULT_SEARCH_LIMIT,
@@ -36,6 +36,19 @@ export function buildApp(operations: Operations, webDir?: string) {
       },
     },
     async (request) => operations.searchActors(request.query.q, request.query.limit),
+  );
+
+  app.get<{ Querystring: { count: number } }>(
+    "/api/actors/random",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          properties: { count: { type: "integer", minimum: 1, maximum: MAX_RANDOM_ACTORS, default: 1 } },
+        },
+      },
+    },
+    async (request) => operations.randomActors(request.query.count),
   );
 
   app.get<{ Querystring: { a: string; b: string } }>(

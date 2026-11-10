@@ -3,7 +3,7 @@ import { loadDataset } from "./dataset";
 import type { Dataset } from "./dataset";
 import type { ChainToCenter, ShortestCycle, ShortestPath } from "../shared/types";
 import { actorsIn, buildGraph } from "./graph";
-import { createOperations, UnknownActorError } from "./operations";
+import { createOperations, RANDOM_MIN_MOVIES, UnknownActorError } from "./operations";
 
 const graph = buildGraph(loadDataset("data/tiny"));
 const operations = createOperations(graph);
@@ -26,6 +26,30 @@ function expectValidChain(result: ShortestPath | ChainToCenter, a: string, b: st
     expect(castOf.get(movie.id)).toContain(actors[i + 1]!.id);
   });
 }
+
+describe("randomActors", () => {
+  it("returns distinct Actors, falling back to every Actor when too few have RANDOM_MIN_MOVIES Movies", () => {
+    // No tiny Actor has 10 Movies, so the pick is from all 17.
+    const picked = operations.randomActors(6);
+    expect(picked).toHaveLength(6);
+    expect(new Set(picked.map((a) => a.id)).size).toBe(6);
+    for (const actor of picked) expect(graph.actors).toContainEqual(actor);
+  });
+
+  it("only picks Actors with at least RANDOM_MIN_MOVIES Movies when there are enough of them", () => {
+    const busy = ["b0", "b1", "b2"];
+    const casts = Array.from({ length: RANDOM_MIN_MOVIES }, () => [...busy]);
+    const ops = createOperations(buildGraph(datasetOf([...busy, "x0", "x1"], [...casts, ["x0", "x1", "b0"]])));
+    for (let seed = 0; seed < 10; seed++) {
+      expect(ops.randomActors(3, () => seed / 10).map((a) => a.id).sort()).toEqual(busy);
+    }
+  });
+
+  it("follows the given random numbers", () => {
+    expect(operations.randomActors(2, () => 0).map((a) => a.id)).toEqual(["nm01", "nm02"]);
+    expect(operations.randomActors(1, () => 0.999).map((a) => a.id)).toEqual(["nm17"]);
+  });
+});
 
 describe("searchActors", () => {
   it("finds Actors by the start of any word in their name", () => {
@@ -96,25 +120,42 @@ describe("shortestPath", () => {
     expect(result.found).toBe(false);
   });
 
-  it("returns the explored Links: every one is a real Link, and the chain's Links are among them", () => {
+  it("returns the search's rounds: every shown Link is real, starts where the tree already is, and the chain's Links are shown", () => {
     const result = operations.shortestPath("nm01", "nm05");
     if (!result.found) throw new Error("expected a path");
-    for (const { from, movie, to } of result.explored) {
-      expect(castOf.get(movie)).toContain(from);
-      expect(castOf.get(movie)).toContain(to);
+    const shown = new Set(["nm01", "nm05"]);
+    for (const round of result.rounds) {
+      expect(round.reached).toBeGreaterThanOrEqual(round.shown.length);
+      for (const { from, movie, to, side } of round.shown) {
+        expect(side).toBe(round.side);
+        expect(castOf.get(movie)).toContain(from);
+        expect(castOf.get(movie)).toContain(to);
+        expect(shown).toContain(from);
+        shown.add(to);
+      }
     }
-    const explored = new Set(result.explored.flatMap(({ from, movie, to }) => [`${from} ${movie} ${to}`, `${to} ${movie} ${from}`]));
+    const links = new Set(result.rounds.flatMap((r) => r.shown).flatMap(({ from, movie, to }) => [`${from} ${movie} ${to}`, `${to} ${movie} ${from}`]));
     result.movies.forEach((movie, i) => {
-      expect(explored).toContain(`${result.actors[i]!.id} ${movie.id} ${result.actors[i + 1]!.id}`);
+      expect(links).toContain(`${result.actors[i]!.id} ${movie.id} ${result.actors[i + 1]!.id}`);
     });
   });
 
-  it("explores links from both ends, and stays in the Group when there is no path", () => {
+  it("names every Actor and Movie the rounds show, and both ends", () => {
+    const result = operations.shortestPath("nm01", "nm05");
+    for (const { from, movie, to } of result.rounds.flatMap((r) => r.shown)) {
+      expect(result.names[from]).toBeDefined();
+      expect(result.names[to]).toBeDefined();
+      expect(result.names[movie]).toBe(titleOf.get(movie));
+    }
+    expect(result.names.nm01).toBe("Kevin Bacon");
+    expect(result.names.nm05).toBe("Dev Ennis");
+  });
+
+  it("searches from both ends, and stays in the Group when there is no path", () => {
     const result = operations.shortestPath("nm15", "nm01");
     expect(result.found).toBe(false);
-    const sides = new Set(result.explored.map((link) => link.side));
-    expect(sides.size).toBeGreaterThan(0);
-    for (const link of result.explored) expect(["nm15", "nm16", "nm17", "nm01", "nm02", "nm12", "nm13"]).toContain(link.from);
+    expect(new Set(result.rounds.map((round) => round.side)).size).toBeGreaterThan(0);
+    for (const link of result.rounds.flatMap((r) => r.shown)) expect(["nm15", "nm16", "nm17", "nm01", "nm02", "nm12", "nm13"]).toContain(link.from);
   });
 
   it("rejects an unknown Actor id", () => {
@@ -145,11 +186,11 @@ describe("largestPath", () => {
     });
   });
 
-  it("returns the explored Links of a bidirectional BFS between the two endpoints", () => {
+  it("returns the rounds of a bidirectional BFS between the two endpoints", () => {
     const result = operations.largestPath();
     const replay = operations.shortestPath(result.actors[0]!.id, result.actors.at(-1)!.id);
-    expect(result.explored.length).toBeGreaterThan(0);
-    expect(result.explored).toEqual(replay.explored);
+    expect(result.rounds.length).toBeGreaterThan(0);
+    expect(result.rounds).toEqual(replay.rounds);
   });
 
   it("ignores pairs in separate Groups, and a smaller Group whose farthest pair is farther apart wins", () => {
@@ -385,6 +426,20 @@ describe("shortestCycle (D6 checks, then IDA* in a worker)", () => {
     const casts = ["c0", "c1", "c2"].flatMap((c) => [[c, "h0"], [c, "h1"]]);
     const other = createOperations(buildGraph(datasetOf(["c0", "c1", "c2", "h0", "h1"], casts)));
     expect(await other.shortestCycle(["c0", "c1", "c2"])).toMatchObject({ outcome: "not-possible", reason: "no-cycle", moreRejected: 0 });
+  });
+
+  it("names every rejected branch's Actors and Movie, for the narration", async () => {
+    // cycleSearch.test's case: Heat = {Ann, Bob, Cat} is the Cycle; Bob → Dan (Ronin) is rejected.
+    const casts = [["ann", "bob", "cat"], ["bob", "dan"], ["dan", "cat"]];
+    const other = createOperations(buildGraph(datasetOf(["ann", "bob", "dan", "cat"], casts)));
+    const result = await other.shortestCycle(["ann", "bob", "cat"]);
+    if (result.outcome !== "found") throw new Error("expected a Cycle");
+    expect(result.rejected.length).toBeGreaterThan(0);
+    for (const { from, movie, to } of result.rejected) {
+      expect(result.names[from]).toBe(from);
+      expect(result.names[to]).toBe(to);
+      expect(result.names[movie]).toMatch(/^Movie \d+$/);
+    }
   });
 
   it("rejects an unknown Actor", async () => {

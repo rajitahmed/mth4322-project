@@ -7,6 +7,7 @@ import type {
   LayerSummary,
   Link,
   MovieSummary,
+  Names,
   ShortestCycle,
   ShortestPath,
   UnlinkedPage,
@@ -20,6 +21,7 @@ import { searchCycleInWorker } from "./cycleWorker";
 import { type Graph, moviesOf } from "./graph";
 import { largestPath } from "./largestPath";
 import { recentCache } from "./recentCache";
+import { showRounds } from "./searchRounds";
 import { shortestPath } from "./shortestPath";
 import { type CenterLayers, chainRatings, layersAround, positionIn } from "./sixDegrees";
 
@@ -29,6 +31,8 @@ export const DEFAULT_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 200;
 /** The default Center, found by exact name (the one with most Movies). A dataset without him falls back to its first Actor. */
 export const DEFAULT_CENTER_NAME = "Kevin Bacon";
+/** `[random]` picks among the Actors with at least this many Movies: names people know, linked enough for quick searches (D27). */
+export const RANDOM_MIN_MOVIES = 10;
 /** Centers other than the default one kept in memory, least recently used dropped first (DECISIONS D12). */
 export const RECENT_CENTERS = 8;
 
@@ -70,17 +74,30 @@ export function createOperations(graph: Graph) {
     movies: chain.movies.map(movieAt),
   });
 
-  /** Bidirectional BFS between two Actor indices, mapped to ids for the front end. */
+  /** The names of these Actor and Movie indices, by id, for an animation. */
+  const namesOf = (actors: Iterable<number>, movies: Iterable<number>): Names => {
+    const names: Names = {};
+    for (const a of actors) names[actorAt(a).id] = actorAt(a).name;
+    for (const m of movies) names[movieAt(m).id] = movieAt(m).title;
+    return names;
+  };
+
+  /** Bidirectional BFS between two Actor indices, its rounds cut down to what the animation shows (D27), mapped to ids. */
   const pathBetween = (a: number, b: number): ShortestPath => {
     const result = shortestPath(graph, a, b);
-    const explored = result.explored.map(({ from, movie, to, side }) => ({
-      from: actorAt(from).id,
-      movie: movieAt(movie).id,
-      to: actorAt(to).id,
-      side,
-    }));
-    if (!result.found) return { found: false, explored };
-    return { found: true, ...chainOf(result), explored };
+    const rounds = showRounds(result.rounds, [a, b], result.found ? result.actors : []);
+    const shown = rounds.flatMap((round) => round.shown);
+    const trace = {
+      rounds: rounds.map(({ side, depth, reached, shown }) => ({
+        side,
+        depth,
+        reached,
+        shown: shown.map(({ from, movie, to }) => ({ from: actorAt(from).id, movie: movieAt(movie).id, to: actorAt(to).id, side })),
+      })),
+      names: namesOf([a, b, ...shown.flatMap((l) => [l.from, l.to])], shown.map((l) => l.movie)),
+    };
+    if (!result.found) return { found: false, ...trace };
+    return { found: true, ...chainOf(result), ...trace };
   };
 
   const farthestPair = largestPath(graph);
@@ -100,6 +117,7 @@ export function createOperations(graph: Graph) {
   /** Only the Links go to a Cycle worker: the Actor and Movie records stay here. */
   const links = { actorMovies: graph.actorMovies, movieActors: graph.movieActors };
   const linkOf = ({ from, movie, to }: IndexLink): Link => ({ from: actorAt(from).id, movie: movieAt(movie).id, to: actorAt(to).id });
+  const randomPool = graph.actors.flatMap((_, a) => (movieCounts[a]! >= RANDOM_MIN_MOVIES ? [a] : []));
 
   return {
     /** Actors whose name has a word starting with the query, best match first. */
@@ -107,15 +125,29 @@ export function createOperations(graph: Graph) {
       return findActors(query, limit).map(actorAt);
     },
 
-    /** The Distance between two Actors, one shortest chain, and the Links tried on the way. */
+    /**
+     * `count` distinct Actors picked at random among those with at least RANDOM_MIN_MOVIES Movies
+     * (every Actor, when too few have that many), for the `[random]` buttons. `random` is in [0, 1).
+     */
+    randomActors(count: number, random: () => number = Math.random): ActorSummary[] {
+      const pool = randomPool.length >= count ? [...randomPool] : graph.actors.map((_, a) => a);
+      // A partial Fisher–Yates shuffle: the first `count` places end up a uniform random sample.
+      for (let i = 0; i < Math.min(count, pool.length); i++) {
+        const j = i + Math.floor(random() * (pool.length - i));
+        [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+      }
+      return pool.slice(0, count).map(actorAt);
+    },
+
+    /** The Distance between two Actors, one shortest chain, and what the search did on the way (D27). */
     shortestPath(a: string, b: string): ShortestPath {
       return pathBetween(indexOf(a), indexOf(b));
     },
 
     /**
      * The largest finite shortest path in the whole database: its Distance, the
-     * lowest-id pair that far apart (lower id first), and their chain, with the Links a bidirectional BFS
-     * between them tries (for the animation). Computed at startup.
+     * lowest-id pair that far apart (lower id first), and their chain, with what a bidirectional BFS
+     * between them does (for the animation). Computed at startup.
      */
     largestPath(): FoundPath {
       return farthestChain;
@@ -179,7 +211,11 @@ export function createOperations(graph: Graph) {
         return { ...check, cutActor: actorAt(check.cutActor), between: [actorAt(a), actorAt(b)] };
       }
       const search = await searchCycleInWorker({ links, actorBlocks: blocks.actorBlocks, block: check.block, chosen });
-      const rejections = { rejected: search.rejected.map(linkOf), moreRejected: search.moreRejected };
+      const rejections = {
+        rejected: search.rejected.map(linkOf),
+        moreRejected: search.moreRejected,
+        names: namesOf(search.rejected.flatMap((l) => [l.from, l.to]), search.rejected.map((l) => l.movie)),
+      };
       if (!search.found) return { outcome: "not-possible", reason: "no-cycle", ...rejections };
       return {
         outcome: "found",

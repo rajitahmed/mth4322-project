@@ -812,3 +812,17 @@ A chronological log of how this application is being built. There is one entry p
   - Committed the user's one-line change, `process.env.DATA_DIR ?? "data/imdb"`.
   - Updated the README: the default is `data/imdb` and the run command is plain `npm start`.
   - Left the unrelated `package-lock.json` change uncommitted.
+
+## 2026-11-10: UI cleanup and feature requests (before ticket #14)
+
+- **Asked:** a list of UI fixes and features: scale the enter-screen title with the icosahedron; `[random]` on every tab; a more informative, less cluttered tab 1 animation (end names, names during the search); no halftone behind the tabs and keep the stage moving after a run; a graph-like final report on every tab; a more verbose tab 2 with a random option; the stuck `[can't be linked]` toggle; six degrees for other actors; animations that feel part of the page; a page title per tab; stepping through the algorithm.
+- **Done (recorded as D27):**
+  - Bug: tab 3's mode buttons now close the list. Reproduced with a failing test first, then fixed (committed on its own).
+  - Server: search rounds with at most 6 named Links each, names for rejected branches, `GET /api/actors/random`.
+  - Stage: caption with numbered steps, `[< step]` `[pause]` `[step >]`, idle motion after the end, no halftone.
+  - Scenes: tab 1 rebuilt around rounds with names; tab 2 tells both checks and the rejected branches; tab 3 names the Center and chain.
+  - Panels: a heading per tab that also names the browser tab (tab 3 follows the Center), `[random]` buttons, `[remove actor]`, the report beside the stage, a flex layout with no page scroll.
+  - Enter screen: the title scales with the icosahedron.
+  - `design.md` updated for these changes.
+- **Checked:** `npm run typecheck`, `npm test`, `npm run build`; all three tabs clicked through in Chrome on the real data (port 3001, since port 3000 was taken by another running server).
+- **Not done:** `/code-review` was not run (usage limit). A tiny-dataset demo for stepping was not added; stepping works on any run.

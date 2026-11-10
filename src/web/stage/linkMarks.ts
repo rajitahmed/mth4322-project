@@ -19,6 +19,10 @@ const SPARKS = 12;
 const SPARK_REACH = 7;
 const SPARK_GLYPHS = ["*", "+", ".", "'"];
 
+/** Cells per second the idle pulse travels along an answer. */
+const PULSE_SPEED = 18;
+const PULSE_GLYPHS = ["*", "+", "."];
+
 /** `value` kept within min to max. */
 export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -49,6 +53,23 @@ export function growLine(grid: Grid, p: Cell, q: Cell, progress: number, ink: In
 export function answerInk(t: number, settled: number): Ink {
   const flashing = t >= settled && t < settled + FLASH;
   return flashing && Math.floor((t - settled) * FLASH_HZ * 2) % 2 === 0 ? "spark" : "green";
+}
+
+/**
+ * The idle motion once a run is over (D27): a spark with a short tail travelling along the answer, cell
+ * by cell from `path[0]`, looping; `closed` joins the last cell back to the first (a Cycle).
+ */
+export function drawPulse(grid: Grid, path: Cell[], t: number, closed = false): void {
+  const ends = closed ? [...path, path[0]!] : path;
+  const cells = ends.slice(1).flatMap((q, k) => lineCells(ends[k]!.x, ends[k]!.y, q.x, q.y, false).slice(1));
+  if (cells.length === 0) return;
+  // An open path leaves a short gap between laps, so the tail runs off the end before the head comes back.
+  const lap = closed ? cells.length : cells.length + PULSE_GLYPHS.length;
+  const head = Math.floor(t * PULSE_SPEED) % lap;
+  PULSE_GLYPHS.forEach((glyph, back) => {
+    const cell = cells[closed ? (head - back + lap) % lap : head - back];
+    if (cell) setCell(grid, cell.x, cell.y, glyph, "spark");
+  });
 }
 
 /** Sparkles flying off each of `from`, `progress` (0 to 1) through their flight; nothing outside that. */

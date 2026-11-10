@@ -1,19 +1,26 @@
-import { MAX_CHOSEN_ACTORS, MIN_CHOSEN_ACTORS, type ShortestCycle } from "../shared/types";
+import { type ActorSummary, MAX_CHOSEN_ACTORS, MIN_CHOSEN_ACTORS, type ShortestCycle } from "../shared/types";
 import { type ActorField, createActorField, type SearchActors } from "./actorField";
 import { button } from "./button";
-import { chainText } from "./chainText";
 import { cycleRunOf } from "./cycle/cycleRun";
 import { cycleScene } from "./cycle/cycleScene";
+import { createHeading } from "./heading";
+import { createReport, type Report } from "./report";
 import type { Stage } from "./stage/stage";
 
-export type FindCycle = (ids: string[]) => Promise<ShortestCycle>;
+/** What tab 2 asks the server (`api.ts`). */
+export interface CycleApi {
+  searchActors: SearchActors;
+  findCycle(ids: string[]): Promise<ShortestCycle>;
+  randomActors(count: number): Promise<ActorSummary[]>;
+}
 
-/** The result line: the Cycle's length and every Link with its Movie, back to the first Actor, or why there is none. */
-export function cycleLine(cycle: ShortestCycle): string {
-  if (cycle.outcome === "found") {
-    const { length, actors, movies } = cycle;
-    return `length ${length}: ${chainText({ distance: length, actors: [...actors, actors[0]!], movies })}`;
-  }
+/** The finished answer: the Cycle's length and the Cycle as a closed graph, or why there is none (in red). */
+export function showCycle(report: Report, cycle: ShortestCycle): void {
+  if (cycle.outcome === "found") return report.show(`length ${cycle.length}`, { ...cycle, closed: true }, "answer");
+  report.show(notPossibleText(cycle), null, "not-possible");
+}
+
+function notPossibleText(cycle: Extract<ShortestCycle, { outcome: "not-possible" }>): string {
   if (cycle.reason === "different-groups") return "not possible: these actors share no chain of movies";
   if (cycle.reason === "no-cycle") return "not possible: no cycle through all of them exists without repeating an actor";
   const [from, to] = cycle.between;
@@ -21,49 +28,75 @@ export function cycleLine(cycle: ShortestCycle): string {
 }
 
 /**
- * Tab 2: 3 actor fields, `[add actor]` up to 6, `[enter]`, the stage, and the result line
- * (`searching…` while the search runs: it has no time limit; hidden while the answer plays).
- * A field never suggests an Actor already picked in another, so the Chosen
- * Actors are always distinct.
+ * Tab 2: the heading; 3 actor fields, `[add actor]` up to 6 and `[remove actor]` down to 3, `[random]`
+ * (a random number of random Actors, searched at once) and `[enter]`; then the stage beside the report
+ * (`searching…` while the search runs: it has no time limit). A field never suggests an Actor already
+ * picked in another, so the Chosen Actors are always distinct.
  */
-export function createCyclePanel(searchActors: SearchActors, findCycle: FindCycle, stage: Stage): HTMLElement {
+export function createCyclePanel(api: CycleApi, stage: Stage, random: () => number = Math.random): HTMLElement {
   const element = document.createElement("section");
+  const heading = createHeading("shortest cycle", "the shortest closed chain of movies through 3 to 6 actors, never repeating an actor");
   const fields = document.createElement("div");
   fields.className = "fields";
   const addActor = button("[add actor]");
+  const removeActor = button("[remove actor]");
+  const randomButton = button("[random]");
   const enter = button("[enter]");
-  const result = document.createElement("p");
-  result.className = "result";
-  element.append(fields, stage.element, result);
+  const report = createReport();
+  const workspace = document.createElement("div");
+  workspace.className = "workspace";
+  workspace.append(stage.element, report.element);
+  element.append(heading.element, fields, workspace);
+  report.show("pick 3 to 6 actors, or try [random]");
 
   const actorFields: ActorField[] = [];
   const pickedIds = () => new Set(actorFields.map((field) => field.selected()?.id));
   const searchUnpicked: SearchActors = async (query) => {
-    const found = await searchActors(query);
+    const found = await api.searchActors(query);
     const picked = pickedIds();
     return found.filter((actor) => !picked.has(actor.id));
+  };
+  const fitButtons = () => {
+    addActor.disabled = actorFields.length >= MAX_CHOSEN_ACTORS;
+    removeActor.disabled = actorFields.length <= MIN_CHOSEN_ACTORS;
   };
   const add = () => {
     const field = createActorField(`actor ${actorFields.length + 1}`, searchUnpicked);
     actorFields.push(field);
     fields.insertBefore(field.element, addActor);
-    addActor.disabled = actorFields.length >= MAX_CHOSEN_ACTORS;
+    fitButtons();
   };
-  fields.append(addActor, enter);
+  const remove = () => {
+    actorFields.pop()!.element.remove();
+    fitButtons();
+  };
+  fields.append(addActor, removeActor, randomButton, enter);
   for (let i = 0; i < MIN_CHOSEN_ACTORS; i++) add();
   addActor.addEventListener("click", add);
+  removeActor.addEventListener("click", remove);
 
-  enter.addEventListener("click", async () => {
+  let latest = 0; // only the newest request may change the screen
+  const search = async (chosen: ActorSummary[]) => {
+    const asked = ++latest;
+    report.show("searching… (no time limit)");
+    const cycle = await api.findCycle(chosen.map((actor) => actor.id)).catch(() => null);
+    if (asked !== latest) return;
+    if (!cycle) return report.show("search failed, try again");
+    const names = chosen.map((actor) => actor.name).join(", ");
+    stage.play(cycleScene(cycleRunOf(cycle, chosen)), (playing) => (playing ? report.show(`searching: ${names}`) : showCycle(report, cycle)));
+  };
+  enter.addEventListener("click", () => {
     const chosen = actorFields.map((field) => field.selected());
-    if (chosen.some((actor) => actor === null)) return;
-    result.textContent = "searching…";
-    result.hidden = false;
-    result.classList.remove("not-possible");
-    const ids = chosen.map((actor) => actor!.id);
-    const cycle = await findCycle(ids).catch(() => null);
-    result.textContent = cycle ? cycleLine(cycle) : "search failed, try again";
-    result.classList.toggle("not-possible", cycle?.outcome === "not-possible");
-    if (cycle) stage.play(cycleScene(cycleRunOf(cycle, ids)), (playing) => (result.hidden = playing));
+    if (chosen.every((actor) => actor !== null)) void search(chosen as ActorSummary[]);
+  });
+  randomButton.addEventListener("click", async () => {
+    const count = MIN_CHOSEN_ACTORS + Math.floor(random() * (MAX_CHOSEN_ACTORS - MIN_CHOSEN_ACTORS + 1));
+    const picked = await api.randomActors(count).catch(() => null);
+    if (!picked) return report.show("search failed, try again");
+    while (actorFields.length < picked.length) add();
+    while (actorFields.length > picked.length) remove();
+    picked.forEach((actor, i) => actorFields[i]!.set(actor));
+    void search(picked);
   });
   return element;
 }

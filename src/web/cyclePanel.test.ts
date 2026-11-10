@@ -15,16 +15,18 @@ const found: ShortestCycle = {
   movies: [heat, heat, heat],
   rejected: [],
   moreRejected: 0,
+  names: {},
 };
 
-function setup(check: ShortestCycle | Error | Promise<ShortestCycle>) {
+function setup(check: ShortestCycle | Error | Promise<ShortestCycle>, random = () => 0) {
   const search = vi.fn(async (query: string) => actors.filter((a) => a.name.toLowerCase().startsWith(query)));
   const findCycle = vi.fn(async (_ids: string[]) => {
     if (check instanceof Error) throw check;
     return check;
   });
+  const randomActors = vi.fn(async (count: number) => actors.slice(0, count));
   const { stage, scenes, finish } = fakeStage();
-  const panel = createCyclePanel(search, findCycle, stage);
+  const panel = createCyclePanel({ searchActors: search, findCycle, randomActors }, stage, random);
   document.body.replaceChildren(panel);
   const inputs = () => [...panel.querySelectorAll("input")];
   const options = () => [...panel.querySelectorAll('[role="option"]')].map((o) => o.textContent);
@@ -41,10 +43,11 @@ function setup(check: ShortestCycle | Error | Promise<ShortestCycle>) {
   };
   const button = (text: string) => [...panel.querySelectorAll("button")].find((b) => b.textContent === text)!;
   const result = () => panel.querySelector<HTMLElement>(".result")!;
-  /** Presses [enter], waits for the answer, and lets the animation finish. */
-  const enter = async () => {
-    button("[enter]").click();
-    await vi.waitFor(() => expect(result().textContent).not.toMatch(/^$|^searching…$/));
+  const chain = () => [...panel.querySelectorAll(".chain li")].map((li) => li.textContent);
+  /** Presses a button ([enter] by default), waits for the answer, and lets the animation finish. */
+  const enter = async (text = "[enter]") => {
+    button(text).click();
+    await vi.waitFor(() => expect(result().textContent).not.toMatch(/^pick|^searching…/));
     finish();
   };
   const pickThree = async () => {
@@ -52,16 +55,49 @@ function setup(check: ShortestCycle | Error | Promise<ShortestCycle>) {
     await pick(1, "ben");
     await pick(2, "cara");
   };
-  return { inputs, options, type, pick, pickThree, button, result, enter, findCycle, scenes, finish };
+  return { panel, inputs, options, type, pick, pickThree, button, result, chain, enter, findCycle, randomActors, scenes, finish };
 }
 
 describe("shortest cycle panel", () => {
+  it("is headed 'shortest cycle'", () => {
+    expect(setup(found).panel.querySelector("h1")!.textContent).toBe("shortest cycle");
+  });
+
   it("starts with 3 actor fields and adds one per [add actor], up to 6", () => {
     const { inputs, button } = setup(found);
     expect(inputs()).toHaveLength(3);
     for (let i = 0; i < 5; i++) button("[add actor]").click();
     expect(inputs()).toHaveLength(6);
     expect(button("[add actor]").disabled).toBe(true);
+  });
+
+  it("removes the last field per [remove actor], down to 3", () => {
+    const { inputs, button } = setup(found);
+    expect(button("[remove actor]").disabled).toBe(true);
+    button("[add actor]").click();
+    button("[add actor]").click();
+    button("[remove actor]").click();
+    expect(inputs()).toHaveLength(4);
+    button("[remove actor]").click();
+    expect(inputs()).toHaveLength(3);
+    expect(button("[remove actor]").disabled).toBe(true);
+    expect(button("[add actor]").disabled).toBe(false);
+  });
+
+  it("[random] picks a random number of random Actors, fills that many fields, and searches at once", async () => {
+    const { inputs, enter, randomActors, findCycle } = setup(found, () => 0.99);
+    await enter("[random]");
+    expect(randomActors).toHaveBeenCalledWith(6);
+    expect(inputs().map((i) => i.value)).toEqual(actors.slice(0, 6).map((a) => `${a.name} (${a.birthYear})`));
+    expect(findCycle).toHaveBeenCalledWith(["nm0", "nm1", "nm2", "nm3", "nm4", "nm5"]);
+  });
+
+  it("[random] can take as few as 3, removing extra fields", async () => {
+    const { inputs, button, enter, randomActors } = setup(found, () => 0);
+    button("[add actor]").click();
+    await enter("[random]");
+    expect(randomActors).toHaveBeenCalledWith(3);
+    expect(inputs()).toHaveLength(3);
   });
 
   it("does not suggest an Actor already picked in another field", async () => {
@@ -79,7 +115,7 @@ describe("shortest cycle panel", () => {
     await pick(1, "ben");
     button("[enter]").click();
     expect(findCycle).not.toHaveBeenCalled();
-    expect(result().textContent).toBe("");
+    expect(result().textContent).toBe("pick 3 to 6 actors, or try [random]");
   });
 
   it("shows a fully red reason when the Actors are in different Groups", async () => {
@@ -103,8 +139,8 @@ describe("shortest cycle panel", () => {
     expect(result().classList.contains("not-possible")).toBe(true);
   });
 
-  it("shows the Cycle with the Movie for each Link, closing back to the first Actor, sending every added field", async () => {
-    const { pick, button, enter, result, findCycle } = setup(found);
+  it("shows the Cycle as a graph with the Movie for each Link, closing back to the first Actor, sending every added field", async () => {
+    const { pick, button, enter, result, chain, findCycle } = setup(found);
     button("[add actor]").click();
     await pick(0, "ada");
     await pick(1, "ben");
@@ -112,24 +148,27 @@ describe("shortest cycle panel", () => {
     await pick(3, "dev");
     await enter();
     expect(findCycle).toHaveBeenCalledWith(["nm0", "nm1", "nm2", "nm3"]);
-    expect(result().textContent).toBe("length 3: Ada Hart — Heat — Ben Cole — Heat — Cara Diaz — Heat — Ada Hart");
+    expect(result().textContent).toBe("length 3");
+    expect(chain()).toEqual(["@Ada Hart1970", "|Heat", "@Ben Cole1971", "|Heat", "@Cara Diaz1972", "|Heat", "@Ada Hartback to the start"]);
     expect(result().classList.contains("not-possible")).toBe(false);
   });
 
   it("shows searching… while the search runs", async () => {
     let answer: (cycle: ShortestCycle) => void = () => {};
-    const { pick, button, result } = setup(new Promise((resolve) => (answer = resolve)));
+    const { pick, button, result, scenes, finish } = setup(new Promise((resolve) => (answer = resolve)));
     await pick(0, "ada");
     await pick(1, "ben");
     await pick(2, "cara");
     button("[enter]").click();
-    expect(result().textContent).toBe("searching…");
+    expect(result().textContent).toBe("searching… (no time limit)");
     answer(found);
-    await vi.waitFor(() => expect(result().textContent).toMatch(/^length 3/));
+    await vi.waitFor(() => expect(scenes).toHaveLength(1));
+    finish();
+    expect(result().textContent).toBe("length 3");
   });
 
   it("says no cycle exists, fully red, when the search runs out", async () => {
-    const { pick, enter, result } = setup({ outcome: "not-possible", reason: "no-cycle", rejected: [], moreRejected: 0 });
+    const { pick, enter, result } = setup({ outcome: "not-possible", reason: "no-cycle", rejected: [], moreRejected: 0, names: {} });
     await pick(0, "ada");
     await pick(1, "ben");
     await pick(2, "cara");
@@ -148,21 +187,21 @@ describe("shortest cycle panel", () => {
     expect(result().classList.contains("not-possible")).toBe(false);
   });
 
-  it("plays the search on the stage, and shows the result line only once the animation ends", async () => {
-    const { pickThree, button, result, scenes, finish } = setup({ ...found, rejected: [{ from: "nm0", movie: "tt9", to: "nm9" }], moreRejected: 2 });
+  it("plays the search on the stage, naming the Chosen Actors, and shows the answer only once the animation ends", async () => {
+    const { pickThree, button, result, scenes, finish } = setup({ ...found, rejected: [{ from: "nm0", movie: "tt9", to: "nm9" }], moreRejected: 2, names: {} });
     await pickThree();
     button("[enter]").click();
     await vi.waitFor(() => expect(scenes).toHaveLength(1));
-    expect(result().hidden).toBe(true);
+    expect(result().textContent).toBe("searching: Ada Hart, Ben Cole, Cara Diaz");
     finish();
-    expect(result().hidden).toBe(false);
+    expect(result().textContent).toBe("length 3");
     expect(endInks(scenes[0]!).has("green")).toBe(true);
   });
 
   const notPossible: ShortestCycle[] = [
     { outcome: "not-possible", reason: "different-groups" },
     { outcome: "not-possible", reason: "cut-actor", cutActor: dev!, between: [ada!, cara!] },
-    { outcome: "not-possible", reason: "no-cycle", rejected: [{ from: "nm0", movie: "tt9", to: "nm9" }], moreRejected: 0 },
+    { outcome: "not-possible", reason: "no-cycle", rejected: [{ from: "nm0", movie: "tt9", to: "nm9" }], moreRejected: 0, names: {} },
   ];
   for (const cycle of notPossible) {
     it(`plays a not-possible result fully red (${cycle.outcome === "not-possible" && cycle.reason})`, async () => {
@@ -180,6 +219,6 @@ describe("shortest cycle panel", () => {
     await pickThree();
     await enter();
     expect(scenes).toHaveLength(0);
-    expect(result().hidden).toBe(false);
+    expect(result().textContent).toBe("search failed, try again");
   });
 });

@@ -18,6 +18,8 @@ export interface Label extends Cell {
 
 export interface RingsLayout {
   center: Cell;
+  /** The outer ring's radius, in rows (a row is CELL_ASPECT columns). */
+  radius: number;
   /** One per Layer: `rings[0]` is the Center, a single dot. */
   rings: Ring[];
   /** One count per Layer outside the Center, in Layer order. */
@@ -78,7 +80,7 @@ export function layoutRings(layerCounts: number[], columns: number, rows: number
   });
   const labelX = Math.min(columns - labelWidth + LABEL_GAP, Math.round(cx + radius * CELL_ASPECT) + LABEL_GAP + 1);
   const top = cy - Math.floor(texts.length / 2);
-  return { center, rings, labels: texts.map((text, i) => ({ x: labelX, y: top + i, text })) };
+  return { center, radius, rings, labels: texts.map((text, i) => ({ x: labelX, y: top + i, text })) };
 }
 
 /** The dot of `ring` that stands for the Actor at `position`. */

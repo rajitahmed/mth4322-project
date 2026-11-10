@@ -16,9 +16,17 @@ interface Side {
   frontier: Int32Array;
 }
 
+/** One round of the search: one side reached every Actor one Link further from its end, each by one Link. */
+export interface Round {
+  side: SearchSide;
+  /** Links from this side's end to the Actors reached this round. */
+  depth: number;
+  links: ExploredLink[];
+}
+
 export type PathResult =
-  | { found: true; distance: number; actors: number[]; movies: number[]; explored: ExploredLink[] }
-  | { found: false; explored: ExploredLink[] };
+  | { found: true; distance: number; actors: number[]; movies: number[]; rounds: Round[] }
+  | { found: false; rounds: Round[] };
 
 /**
  * Shortest path between two Actors by bidirectional BFS (DECISIONS D4, D16).
@@ -29,16 +37,17 @@ export type PathResult =
 export function shortestPath(graph: Graph, a: number, b: number): PathResult {
   const sideA: Side = { name: "a", search: startSearch(graph, a), frontier: Int32Array.of(a) };
   const sideB: Side = { name: "b", search: startSearch(graph, b), frontier: Int32Array.of(b) };
-  const explored: ExploredLink[] = [];
+  const rounds: Round[] = [];
   let meeting = a === b ? a : -1;
 
   while (meeting === -1 && sideA.frontier.length > 0 && sideB.frontier.length > 0) {
     const [side, other] = sideA.frontier.length <= sideB.frontier.length ? [sideA, sideB] : [sideB, sideA];
     side.frontier = expandFrontier(graph, side.search, side.frontier);
-    for (const actor of side.frontier) explored.push(discoveredLink(side.search, actor, side.name));
+    const links = Array.from(side.frontier, (actor) => discoveredLink(side.search, actor, side.name));
+    if (links.length > 0) rounds.push({ side: side.name, depth: side.search.distance[links[0]!.to]!, links });
     meeting = closestMeeting(side.search, other.search, side.frontier);
   }
-  if (meeting === -1) return { found: false, explored };
+  if (meeting === -1) return { found: false, rounds };
 
   const fromA = chainTo(sideA.search, meeting);
   const fromB = chainTo(sideB.search, meeting);
@@ -47,7 +56,7 @@ export function shortestPath(graph: Graph, a: number, b: number): PathResult {
     distance: fromA.movies.length + fromB.movies.length,
     actors: [...fromA.actors, ...fromB.actors.reverse().slice(1)],
     movies: [...fromA.movies, ...fromB.movies.reverse()],
-    explored,
+    rounds,
   };
 }
 

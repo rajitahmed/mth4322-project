@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { rowText } from "../stage/charGrid";
-import { composeFrame, isOnIcosahedron, stageLayout } from "./enterFrame";
+import { bigText } from "./bigText";
+import { composeFrame, isOnIcosahedron, stageLayout, titleRows } from "./enterFrame";
 
 const W = 160;
 const H = 50;
@@ -41,6 +42,23 @@ describe("enter frame", () => {
     const done = text(frame(1, { dissolve: 1 }));
     expect(done).toMatch(/^[ ·•●\n]*$/);
     expect(done).toBe(text(composeFrame(W, H, ASPECT, 1, false, 1)));
+  });
+
+  it("sizes the title to the icosahedron: marquee dots on a big screen, FIGlet letters on a laptop, plain text when small", () => {
+    const fits = (width: number, height: number) => {
+      const rows = titleRows(width, height, ASPECT);
+      const { radius } = stageLayout(width, height, ASPECT);
+      expect(Math.max(...rows.map((r) => r.length))).toBeLessThanOrEqual(2 * radius * ASPECT);
+      expect(rows.length).toBeLessThanOrEqual(2 * radius);
+      return rows;
+    };
+    const big = fits(420, 130);
+    expect(big.join("")).toMatch(/^[● ]+$/);
+    expect(big.length).toBeGreaterThan(16);
+    expect(fits(400, 120).length).toBeLessThan(big.length); // a smaller screen, a smaller title
+    expect(fits(W, H)).toEqual(bigText(["MOVIE", "STATISTICS"]));
+    expect(fits(50, 16)).toEqual(["MOVIE STATISTICS"]);
+    expect(fits(30, 10)).toEqual(["MOVIE", "STATISTICS"]);
   });
 
   it("knows whether a cell is on the icosahedron", () => {

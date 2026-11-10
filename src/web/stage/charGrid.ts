@@ -36,6 +36,19 @@ export function writeText(grid: Grid, x: number, y: number, text: string, ink: I
   [...text].forEach((char, i) => setCell(grid, x + i, y, char, ink));
 }
 
+/** `text` cut to `width` characters, the last one `…` when cut; "" when there is no room. */
+export function fitText(text: string, width: number): string {
+  if (width <= 0) return "";
+  return text.length <= width ? text : `${text.slice(0, width - 1)}…`;
+}
+
+/** A label of at most `width` characters, written so it starts at, centers on, or ends at column `x`, kept on the grid. */
+export function writeLabel(grid: Grid, x: number, y: number, text: string, ink: Ink, width: number, align: "start" | "center" | "end"): void {
+  const fitted = fitText(text, Math.min(width, grid.width));
+  const left = align === "start" ? x : align === "end" ? x - fitted.length + 1 : x - Math.floor(fitted.length / 2);
+  writeText(grid, Math.max(0, Math.min(grid.width - fitted.length, left)), y, fitted, ink);
+}
+
 /** Solid glyphs and dotted glyphs, by slope: flat, steep, rising, falling. */
 const SOLID = { flat: "-", steep: "|", rising: "/", falling: "\\" };
 const DOTTED = { flat: ".", steep: ":", rising: "'", falling: "'" };

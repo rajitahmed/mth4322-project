@@ -11,7 +11,10 @@ const SOLID = ["-", "|", "/", "\\"];
 const DOTTED = [".", ":", "'"];
 
 /** a, x, b, c on the Cycle (a, b, c chosen), "Heat" used twice; p, q, r rejected. */
+const names = { a: "Ann", b: "Bob", c: "Cat", x: "Xan", p: "Pam", q: "Quin", r: "Rae", d: "Dev", tt: "Heat" };
 const found: CycleRun = {
+  outcome: "found",
+  names,
   chosen: ["a", "b", "c"],
   circle: ["a", "x", "b", "c"],
   movies: ["Heat", "Ring One", "Heat", "Low Tide"],
@@ -19,9 +22,18 @@ const found: CycleRun = {
   moreRejected: 0,
   cut: null,
 };
-const noCycle: CycleRun = { chosen: ["a", "b", "c"], circle: ["a", "b", "c"], movies: null, rejected: [link("a", "p"), link("b", "q")], moreRejected: 0, cut: null };
-const differentGroups: CycleRun = { ...noCycle, rejected: [] };
-const cutActor: CycleRun = { ...differentGroups, cut: { actor: "d", between: ["a", "c"] } };
+const noCycle: CycleRun = {
+  outcome: "no-cycle",
+  names,
+  chosen: ["a", "b", "c"],
+  circle: ["a", "b", "c"],
+  movies: null,
+  rejected: [link("a", "p"), link("b", "q")],
+  moreRejected: 0,
+  cut: null,
+};
+const differentGroups: CycleRun = { ...noCycle, outcome: "different-groups", rejected: [] };
+const cutActor: CycleRun = { ...differentGroups, outcome: "cut-actor", cut: { actor: "d", between: ["a", "c"] } };
 const notPossible = { "no-cycle": noCycle, "different-groups": differentGroups, "cut-actor": cutActor };
 
 /** Every frame at 30 fps, from 0 to the scene's end. */
@@ -55,8 +67,14 @@ describe("cycleScene", () => {
       for (const size of [3, 6, 20]) {
         const circle = Array.from({ length: size }, (_, i) => `r${i}`);
         const rejected = Array.from({ length: count }, (_, i) => link("r0", `n${i}`));
-        const base: CycleRun = { chosen: circle.slice(0, 3), circle, movies: circle.map(() => "Heat"), rejected, moreRejected: 0, cut: null };
-        for (const run of [base, { ...base, movies: null }, { ...base, movies: null, rejected: [], cut: { actor: "d", between: ["r0", "r1"] as [string, string] } }]) {
+        const base: CycleRun = { outcome: "found", names: {}, chosen: circle.slice(0, 3), circle, movies: circle.map(() => "Heat"), rejected, moreRejected: 0, cut: null };
+        const cut = { actor: "d", between: ["r0", "r1"] as [string, string] };
+        for (const run of [
+          base,
+          { ...base, outcome: "no-cycle" as const, movies: null },
+          { ...base, outcome: "cut-actor" as const, movies: null, rejected: [], cut },
+          { ...base, outcome: "different-groups" as const, movies: null, rejected: [] },
+        ]) {
           const { duration } = cycleScene(run);
           expect(duration).toBeGreaterThanOrEqual(5);
           expect(duration).toBeLessThanOrEqual(15);
@@ -126,6 +144,39 @@ describe("cycleScene", () => {
 
   it("shows a cut actor off the circle as a red `+`", () => {
     expect(cellAt(cutActor, lastFrame(cutActor), "d")).toEqual({ char: "+", ink: "red" });
+  });
+
+  it("names the Chosen Actors from the start, and each circle Actor once reached", () => {
+    expect(screenText(cycleScene(found).frame(0, COLUMNS, ROWS))).toMatch(/Ann[\s\S]*Bob|Bob[\s\S]*Ann/);
+    expect(screenText(cycleScene(found).frame(0, COLUMNS, ROWS))).not.toContain("Xan");
+    expect(screenText(lastFrame(found))).toContain("Xan");
+  });
+
+  it("tells the checks, the rejected branches, each closing Link and the answer", () => {
+    expect(cycleScene(found).steps.map((s) => s.text)).toEqual([
+      "check 1: are Ann, Bob, Cat all linked by some chain of movies (one group)?",
+      "yes. check 2: does one actor split them, so every route between two of them passes through it?",
+      "no, they share one block: search for the shortest cycle (IDA*), last pass with a limit of length 4",
+      "try Ann → Pam (Heat): rejected, every cycle through it is longer than 4",
+      "try Xan → Quin (Heat): rejected, every cycle through it is longer than 4",
+      "try Quin → Rae (Heat): rejected, every cycle through it is longer than 4",
+      "link 1 of 4: Ann → Xan (Heat)",
+      "link 2 of 4: Xan → Bob (Ring One)",
+      "link 3 of 4: Bob → Cat (Heat)",
+      "link 4 of 4: Cat → Ann (Low Tide)",
+      "shortest cycle: length 4, back to Ann",
+    ]);
+  });
+
+  it("says why there is none, after the check that found it", () => {
+    expect(cycleScene(differentGroups).steps.map((s) => s.text).at(-1)).toBe("no: some of them share no chain of movies at all, so no cycle can hold them all");
+    expect(cycleScene(cutActor).steps.map((s) => s.text).at(-1)).toBe("yes: every route from Ann to Cat passes through Dev, so no cycle can hold both");
+    expect(cycleScene(noCycle).steps.map((s) => s.text).at(-1)).toBe("every branch was rejected: no cycle through all of them exists without repeating an actor");
+  });
+
+  it("keeps a spark running around the Cycle once the run is over", () => {
+    const scene = cycleScene(found);
+    expect(cellsInk(scene.frame(scene.duration + 0.3, COLUMNS, ROWS), "spark").length).toBeGreaterThan(0);
   });
 
   it("draws the same picture every time it is played", () => {

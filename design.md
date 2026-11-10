@@ -79,10 +79,16 @@ marquee gold sparkles. Seven colors. Nothing else.
 - Top bar: MOVIE STATISTICS on the left in small text, the 3 tabs in the
   middle as `[ largest path ] [ shortest cycle ] [ six degrees of bacon ]`,
   and the link to the page which explains the project on the top right.
-- Under the top bar: the actor fields for that tab on one row.
-- The rest of the screen is the stage where the animation plays.
-- Under the stage: one result line in 24px, for example the distance and the
-  chain of movies.
+- Under the top bar: the tab's title in 24px (it also names the browser tab,
+  for example "six degrees of Kevin Bacon"), one line on what it shows, then
+  the actor fields for that tab with `[random]` buttons.
+- The rest of the screen is the workspace: the stage on the left, framed,
+  with a caption bar on top telling what the algorithm is doing and the
+  `[< step]` `[pause]` `[step >]` `[skip]` `[replay]` controls; the report on
+  the right.
+- The report: the answer in 24px (for example "distance 12"), then the chain
+  drawn as a graph, top to bottom: each actor a green `@` node, each movie a
+  green `|` edge to the next. A cycle ends back on its first actor.
 - Active tab is `--accent`. Inactive tabs are `--ink-dim`.
 - Inputs are a label, then an underline of `_` characters. Autocomplete is a
   box frame under the field, with the highlighted row in `--accent`.
@@ -92,7 +98,11 @@ marquee gold sparkles. Seven colors. Nothing else.
 - Center of the screen: the icosahedron from ascii.rest, turning.
 - Inside it: the big text in ASCII saying MOVIE STATISTICS. This is the enter
   button. The whole icosahedron is clickable, and Enter on the keyboard works.
-- Behind it: a slow Halftone dot field in `--ink-dim`.
+  The text grows and shrinks with the icosahedron: marquee dots (`●`) on big
+  screens, FIGlet letters on a laptop, plain text when small. The wireframe
+  stops one cell short of the letters.
+- Behind it: a slow Halftone dot field in `--ink-dim`. This is the only
+  Halftone background on the site; the tabs' stages have none.
 - On enter, the icosahedron dissolves into dots and the tabs appear.
 
 ## Animations
@@ -103,8 +113,10 @@ fine as long as everything around it stays at 60.
 
 - **Live linking (tab 1 and tab 2):** actors appear as `o`. Links are tried
   one after another in `--ink`. A link that leads nowhere turns red and
-  dotted, then fades into the Halftone background. A link that is part of the
-  answer turns green and solid.
+  dotted, then dissolves into dots and is gone. A link that is part of the
+  answer turns green and solid. Actors are named on the stage while they are
+  being looked at: the two ends from the start, a round's actors while that
+  round is told, the answer's actors once it is found.
 - **Sparkles out:** when the answer is reached, the green path flashes
   `--spark`, sparkle glyphs fly off the two end actors for about one second,
   then the result line appears.
@@ -119,7 +131,10 @@ fine as long as everything around it stays at 60.
   lighter Halftone dots. Picking a dot draws its link back to the center in
   green.
 - Timing: a full animation runs 5 to 15 seconds, so it fits a presentation.
-  `[replay]` runs it again. `[skip]` jumps to the result.
+  `[replay]` runs it again. `[skip]` jumps to the result. `[< step]` and
+  `[step >]` pause and move one step of the algorithm at a time.
+- After the end the stage keeps moving: a spark (`*` `+` `.` in `--spark`)
+  runs along the answer, or, on the rings with no chain, a dotted sweep turns.
 
 ## Rendering
 

@@ -8,6 +8,21 @@ import { graphOf } from "./testGraphs";
 const operations = createOperations(buildGraph(loadDataset("data/tiny")));
 const app = buildApp(operations);
 
+describe("GET /api/actors/random", () => {
+  it("returns `count` distinct Actors", async () => {
+    const response = await app.inject({ url: "/api/actors/random?count=4" });
+    expect(response.statusCode).toBe(200);
+    const actors = response.json();
+    expect(actors).toHaveLength(4);
+    expect(new Set(actors.map((a: { id: string }) => a.id)).size).toBe(4);
+  });
+
+  it("returns one Actor by default, and refuses more than a Cycle takes", async () => {
+    expect((await app.inject({ url: "/api/actors/random" })).json()).toHaveLength(1);
+    expect((await app.inject({ url: "/api/actors/random?count=7" })).statusCode).toBe(400);
+  });
+});
+
 describe("GET /api/actors", () => {
   it("returns matching Actors with id, name and birth year", async () => {
     const response = await app.inject({ url: "/api/actors?q=sam" });
@@ -51,14 +66,15 @@ describe("GET /api/path", () => {
 });
 
 describe("GET /api/largest-path", () => {
-  it("returns the Distance, the two Actors, the chain of Movies and the explored Links", async () => {
+  it("returns the Distance, the two Actors, the chain of Movies and the search's rounds with their names", async () => {
     const response = await app.inject({ url: "/api/largest-path" });
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body).toMatchObject({ found: true, distance: 7 });
     expect([body.actors[0].name, body.actors.at(-1).name]).toEqual(["Pia Holt", "Xia Ortiz"]);
     expect(body.movies).toHaveLength(7);
-    expect(body.explored.length).toBeGreaterThan(0);
+    expect(body.rounds.length).toBeGreaterThan(0);
+    expect(body.names.nm08).toBe("Pia Holt");
   });
 
   it("serves one result, computed once when the operations module is created", () => {

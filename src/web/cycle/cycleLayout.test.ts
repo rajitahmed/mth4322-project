@@ -11,6 +11,8 @@ const reach = ({ x, y }: { x: number; y: number }) => Math.hypot((x - center.x) 
 
 /** a, x, b, c on the Cycle (a, b, c chosen); p, q, r are rejected branches, s an off-circle Actor they came from. */
 const found: CycleRun = {
+  outcome: "found",
+  names: {},
   chosen: ["a", "b", "c"],
   circle: ["a", "x", "b", "c"],
   movies: ["Heat", "Heat", "Ring One", "Heat"],

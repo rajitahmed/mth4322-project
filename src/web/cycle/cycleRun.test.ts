@@ -14,25 +14,29 @@ describe("cycleRunOf", () => {
       movies: [{ id: "tt1", title: "Heat" }, { id: "tt1", title: "Heat" }, { id: "tt2", title: "Ring One" }],
       rejected: [link("a", "p")],
       moreRejected: 7,
+      names: { p: "Pam", tt: "Heat" },
     };
-    expect(cycleRunOf(cycle, ["c", "a", "b"])).toEqual({
+    expect(cycleRunOf(cycle, ["c", "a", "b"].map(actor))).toEqual({
+      outcome: "found",
       chosen: ["c", "a", "b"],
       circle: ["a", "b", "c"],
       movies: ["Heat", "Heat", "Ring One"],
       rejected: [link("a", "p")],
       moreRejected: 7,
       cut: null,
+      names: { p: "Pam", tt: "Heat", a: "Name a", b: "Name b", c: "Name c" },
     });
   });
 
   it("puts the Chosen Actors on the circle when there is no Cycle", () => {
-    const run = cycleRunOf({ outcome: "not-possible", reason: "no-cycle", rejected: [link("a", "p")], moreRejected: 0 }, ["a", "b", "c"]);
-    expect(run).toEqual({ chosen: ["a", "b", "c"], circle: ["a", "b", "c"], movies: null, rejected: [link("a", "p")], moreRejected: 0, cut: null });
-    expect(cycleRunOf({ outcome: "not-possible", reason: "different-groups" }, ["a", "b", "c"]).rejected).toEqual([]);
+    const chosen = ["a", "b", "c"].map(actor);
+    const run = cycleRunOf({ outcome: "not-possible", reason: "no-cycle", rejected: [link("a", "p")], moreRejected: 0, names: {} }, chosen);
+    expect(run).toMatchObject({ outcome: "no-cycle", chosen: ["a", "b", "c"], circle: ["a", "b", "c"], movies: null, rejected: [link("a", "p")], cut: null });
+    expect(cycleRunOf({ outcome: "not-possible", reason: "different-groups" }, chosen)).toMatchObject({ outcome: "different-groups", rejected: [] });
   });
 
-  it("keeps the cut actor and the pair it splits", () => {
-    const run = cycleRunOf({ outcome: "not-possible", reason: "cut-actor", cutActor: actor("b"), between: [actor("a"), actor("c")] }, ["a", "b", "c"]);
-    expect(run.cut).toEqual({ actor: "b", between: ["a", "c"] });
+  it("keeps the cut actor and the pair it splits, named", () => {
+    const run = cycleRunOf({ outcome: "not-possible", reason: "cut-actor", cutActor: actor("d"), between: [actor("a"), actor("c")] }, ["a", "b", "c"].map(actor));
+    expect(run).toMatchObject({ outcome: "cut-actor", cut: { actor: "d", between: ["a", "c"] }, names: { d: "Name d" } });
   });
 });

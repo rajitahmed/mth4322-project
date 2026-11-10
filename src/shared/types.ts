@@ -32,14 +32,35 @@ export interface Chain {
   movies: MovieSummary[];
 }
 
-/** A chain found by a two-sided search, with the Links it tried (for the animation). */
-export interface FoundPath extends Chain {
+/** The name of every Actor and the title of every Movie an animation shows, by id (Actor and Movie ids never clash). */
+export type Names = Record<string, string>;
+
+/**
+ * One round of a two-sided search (for the animation, DECISIONS D27): one side reached `reached`
+ * Actors one Link further from its end. `shown` is a few of the Links that reached them: the answer's
+ * first, then Links from Actors shown in earlier rounds, so they draw as one small tree per side.
+ */
+export interface SearchRound {
+  side: SearchSide;
+  /** Links from this side's end to the Actors reached this round. */
+  depth: number;
+  reached: number;
+  shown: ExploredLink[];
+}
+
+/** What a two-sided search did, round by round, with the names the animation writes. */
+export interface SearchTrace {
+  rounds: SearchRound[];
+  names: Names;
+}
+
+/** A chain found by a two-sided search, with what the search did (for the animation). */
+export interface FoundPath extends Chain, SearchTrace {
   found: true;
-  explored: ExploredLink[];
 }
 
 /** Shortest path between two Actors, or none when they are in different Groups. */
-export type ShortestPath = FoundPath | { found: false; explored: ExploredLink[] };
+export type ShortestPath = FoundPath | ({ found: false } & SearchTrace);
 
 /** Which chain tab 3 shows: the BFS-parent chain, or the shortest chain with the highest average rating (DECISIONS D11). */
 export const CHAIN_MODES = ["shortest", "best-rated"] as const;
@@ -86,7 +107,12 @@ export interface Link {
 export interface RejectedBranches {
   rejected: Link[];
   moreRejected: number;
+  /** The names of the rejected branches' Actors and Movies, for the animation's narration. */
+  names: Names;
 }
+
+/** How many Actors `[random]` may ask for at once: the most a Cycle takes. */
+export const MAX_RANDOM_ACTORS = MAX_CHOSEN_ACTORS;
 
 /**
  * The shortest Cycle through 3 to 6 Chosen Actors (DECISIONS D6–D8). Not

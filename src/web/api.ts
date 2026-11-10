@@ -15,6 +15,13 @@ export async function searchActors(query: string): Promise<ActorSummary[]> {
   return response.json();
 }
 
+/** `count` distinct random Actors, from those with enough Movies to be known (D27). */
+export async function randomActors(count: number): Promise<ActorSummary[]> {
+  const response = await fetch(`/api/actors/random?count=${count}`);
+  if (!response.ok) throw new Error(`Random actors failed: ${response.status}`);
+  return response.json();
+}
+
 export async function findPath(a: string, b: string): Promise<ShortestPath> {
   const response = await fetch(`/api/path?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
   if (!response.ok) throw new Error(`Path search failed: ${response.status}`);

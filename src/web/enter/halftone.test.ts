@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGrid, setCell } from "./charGrid";
+import { createGrid, setCell } from "../stage/charGrid";
 import { halftoneGlyph, overHalftone } from "./halftone";
 
 const cells = (t: number) => {

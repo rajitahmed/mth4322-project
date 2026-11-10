@@ -1,5 +1,5 @@
 /** A slow halftone dot field: a drifting tone, dithered onto the light-to-dark ramp of design.md. */
-import { createGrid, type Grid, setCell } from "./charGrid";
+import { createGrid, type Grid, setCell } from "../stage/charGrid";
 
 const RAMP = [" ", "·", "•", "●"];
 

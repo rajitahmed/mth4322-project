@@ -1,85 +1,84 @@
 import { describe, expect, it } from "vitest";
-import type { ExploredLink } from "../../shared/types";
-import { layoutLinks } from "./linkLayout";
+import type { FoundPath } from "../../shared/types";
+import { found, link, notFound } from "./fixtures";
+import { layoutLinks, linkingOf } from "./linkLayout";
 
-const link = (from: string, to: string, side: "a" | "b"): ExploredLink => ({ from, movie: "tt", to, side });
-
-/** a — x — y — b, met at y; p, q, r are rejected side branches. */
-const found = {
-  ends: ["a", "b"] as [string, string],
-  tried: [link("a", "x", "a"), link("a", "p", "a"), link("b", "y", "b"), link("b", "q", "b"), link("x", "y", "a"), link("x", "r", "a")],
-  answer: ["a", "x", "y", "b"],
-};
-
-/** Two Groups: a's side runs two Links deep, b's one. */
-const notPossible = {
-  ends: ["a", "b"] as [string, string],
-  tried: [link("a", "p", "a"), link("b", "q", "b"), link("p", "r", "a")],
-  answer: [],
-};
-
-const [COLUMNS, ROWS] = [60, 21];
-const MIDDLE = 10;
+const [COLUMNS, ROWS] = [80, 25];
 
 describe("layoutLinks", () => {
-  it("puts the two ends on the middle row, at the left and right edges", () => {
-    for (const input of [found, notPossible]) {
-      const at = layoutLinks(input, COLUMNS, ROWS);
-      expect(at.get("a")!.y).toBe(MIDDLE);
-      expect(at.get("b")!.y).toBe(MIDDLE);
-      expect(at.get("a")!.x).toBeLessThan(4);
-      expect(at.get("b")!.x).toBeGreaterThan(COLUMNS - 5);
+  it("puts the answer chain along the middle row, evenly spaced, the ends at the left and right edges", () => {
+    const { at, middle } = layoutLinks(found, COLUMNS, ROWS);
+    expect([at.get("ann"), at.get("cal"), at.get("bea")]).toEqual([
+      { x: 2, y: middle },
+      { x: 40, y: middle },
+      { x: COLUMNS - 3, y: middle },
+    ]);
+  });
+
+  it("keeps every other Actor off the middle row and its label rows, in its round's column", () => {
+    const { at, middle, roundX } = layoutLinks(found, COLUMNS, ROWS);
+    for (const id of ["dan", "eve", "fay"]) {
+      const { x, y } = at.get(id)!;
+      expect([middle - 2, middle - 1, middle, middle + 1]).not.toContain(y);
+      expect(y).toBeGreaterThanOrEqual(2);
+      expect(y).toBeLessThan(ROWS - 1);
+      expect(x).toBe(id === "fay" ? roundX[1] : roundX[0]);
     }
   });
 
-  it("lays the answer chain out left to right along the middle row, evenly spaced", () => {
-    const at = layoutLinks(found, COLUMNS, ROWS);
-    const xs = found.answer.map((id) => at.get(id)!.x);
-    expect(found.answer.map((id) => at.get(id)!.y)).toEqual([MIDDLE, MIDDLE, MIDDLE, MIDDLE]);
-    const gaps = xs.slice(1).map((x, i) => x - xs[i]!);
-    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(1);
-    expect(Math.min(...gaps)).toBeGreaterThan(10);
-  });
-
-  it("keeps rejected Actors off the middle row, a column further from their own end per Link", () => {
-    const at = layoutLinks(notPossible, COLUMNS, ROWS);
-    expect(["p", "q", "r"].map((id) => at.get(id)!.y)).not.toContain(MIDDLE);
-    expect(at.get("a")!.x).toBeLessThan(at.get("p")!.x);
-    expect(at.get("p")!.x).toBeLessThan(at.get("r")!.x);
-    expect(at.get("q")!.x).toBeLessThan(at.get("b")!.x);
-    expect(at.get("r")!.x).toBeLessThan(at.get("q")!.x); // the two sides never cross in a "no path"
-  });
-
-  it("places every Actor on the grid, with whole cell coordinates, even when there are far more Actors than rows", () => {
-    const many = { ...notPossible, tried: Array.from({ length: 500 }, (_, i) => link("a", `n${i}`, "a")) };
-    for (const input of [found, notPossible, many]) {
-      for (const { x, y } of layoutLinks(input, COLUMNS, ROWS).values()) {
-        expect(Number.isInteger(x) && Number.isInteger(y)).toBe(true);
-        expect(x >= 0 && x < COLUMNS && y >= 0 && y < ROWS).toBe(true);
-      }
-    }
-  });
-
-  it("spreads one Link's worth of Actors over the rows", () => {
-    const many = { ...notPossible, tried: Array.from({ length: 40 }, (_, i) => link("a", `n${i}`, "a")) };
-    const rows = new Set([...layoutLinks(many, COLUMNS, ROWS).entries()].filter(([id]) => id.startsWith("n")).map(([, at]) => at.y));
-    expect(rows.size).toBeGreaterThan(ROWS - 4);
-  });
-
-  it("orders each column by its parents' rows, so branches don't cross", () => {
-    const tree = {
-      ...notPossible,
-      tried: [link("a", "p1", "a"), link("a", "p2", "a"), link("p2", "c1", "a"), link("p1", "c2", "a")],
+  it("orders a column by its parents' rows, so branches don't cross", () => {
+    const twoRounds = {
+      ...notFound,
+      rounds: [
+        { side: "a" as const, depth: 1, reached: 2, shown: [link("ann", "dan", "a"), link("ann", "eve", "a")] },
+        { side: "a" as const, depth: 2, reached: 2, shown: [link("eve", "gus", "a"), link("dan", "hal", "a")] },
+      ],
     };
-    const at = layoutLinks(tree, COLUMNS, ROWS);
-    expect(at.get("p1")!.y).toBeLessThan(at.get("p2")!.y);
-    expect(at.get("c2")!.y).toBeLessThan(at.get("c1")!.y); // c2's parent p1 sits above c1's parent p2
+    const { at } = layoutLinks(twoRounds, COLUMNS, ROWS);
+    const [dan, eve] = [at.get("dan")!.y, at.get("eve")!.y];
+    expect(Math.sign(at.get("hal")!.y - at.get("gus")!.y)).toBe(Math.sign(dan - eve));
   });
 
-  it("keeps the two sides apart where they share a column: side a above, side b below", () => {
-    const at = layoutLinks(found, COLUMNS, ROWS);
-    expect(at.get("r")!.x).toBe(at.get("q")!.x); // two Links from a, one from b: the same column
-    expect(at.get("r")!.y).toBeLessThan(MIDDLE);
-    expect(at.get("q")!.y).toBeGreaterThan(MIDDLE);
+  it("keeps the two sides apart when there is no path", () => {
+    const { at } = layoutLinks(notFound, COLUMNS, ROWS);
+    expect(at.get("ann")!.x).toBeLessThan(at.get("dan")!.x);
+    expect(at.get("dan")!.x).toBeLessThan(at.get("bea")!.x);
+  });
+
+  it("places every Actor on the grid, even on a tiny stage", () => {
+    for (const cell of layoutLinks(found, 12, 4).at.values()) {
+      expect(cell.x).toBeGreaterThanOrEqual(0);
+      expect(cell.x).toBeLessThan(12);
+      expect(Number.isInteger(cell.y)).toBe(true);
+    }
+  });
+});
+
+describe("linkingOf", () => {
+  it("adds the chain's names and titles to the search's names", () => {
+    const path: FoundPath = {
+      found: true,
+      distance: 1,
+      actors: [
+        { id: "nm1", name: "One", birthYear: null },
+        { id: "nm2", name: "Two", birthYear: null },
+      ],
+      movies: [{ id: "tt1", title: "Film" }],
+      rounds: [],
+      names: {},
+    };
+    expect(linkingOf(path, null)).toEqual({
+      ends: ["nm1", "nm2"],
+      rounds: [],
+      answer: ["nm1", "nm2"],
+      answerMovies: ["tt1"],
+      names: { nm1: "One", nm2: "Two", tt1: "Film" },
+    });
+  });
+
+  it("searches between the two picked Actors when there is no path, and names them", () => {
+    const one = { id: "nm1", name: "One", birthYear: null };
+    const two = { id: "nm2", name: "Two", birthYear: null };
+    expect(linkingOf({ found: false, rounds: [], names: {} }, [one, two])).toMatchObject({ ends: ["nm1", "nm2"], answer: [], names: { nm1: "One", nm2: "Two" } });
   });
 });

@@ -652,3 +652,19 @@ Algorithmic decisions for the 3 operations and the data filter, in chronological
     - Tab 2 was checked through the API but not clicked through in Chrome, because the automation's typing did not reach the page. A human should click through it once.
     - The headroom under 512 MB is thin (~45 MB) on Windows working-set numbers. #14 measures it on Render.
     - The new startup log line is a small extra the ticket did not ask for. It is kept so #14 can read the same numbers in Render's logs.
+
+## D27: UI cleanup in code: search rounds with a few named Links, names in the responses, random Actors, steps, idle motion, a graph report, and a title that scales (all tabs)
+
+- **Date:** 2026-11-10
+- **Decisions:**
+  - **Tab 1 sends the search as rounds, not every Link tried.** `shortestPath` records one round per frontier expansion (side, depth, Links). `showRounds` keeps each round's count and at most 6 Links: the answer's first, then Links from an Actor already shown, so the animation draws one small, readable tree per side. A `names` map (id → name/title) covers every shown Actor and Movie. The largest path's response drops from ~325 KB to ~10 KB.
+    - Alternative: send every explored Link plus names and sample in the browser. Rejected: a large payload for Links the stage can't show, and a cluttered picture (the user's complaint).
+  - **Tab 2's rejected branches come with a `names` map**, so the caption can say which branch was tried and why it was rejected.
+  - **`[random]` picks uniformly among Actors with at least 10 Movies** (4,356 on the real data; every Actor when fewer than asked qualify), by a partial Fisher–Yates shuffle on the server. Known names, well linked, so searches and Cycles finish fast. Tab 2's `[random]` also picks the count (3–6).
+  - **Scenes narrate themselves.** A Scene has `steps` (time, text). The stage shows the current step in a caption and `[< step]` / `[step >]` pause and jump between steps, so the algorithm can be walked through one round at a time.
+  - **No halftone behind the tabs; it stays on the enter screen only.** Rejected Links dissolve into dots and vanish.
+  - **The stage keeps running after a run ends**: a spark runs along the answer (tabs 1, 2, and 3 with a chain), or a dotted sweep turns over the rings.
+  - **The result is a report beside the stage**: the answer in 24px, then the chain as a vertical graph (`@` node, `|` edge), closed back to the first Actor for a Cycle.
+  - **The enter-screen title scales with the icosahedron**: a 5 × 7 dot font scaled by nearest neighbour when it fits at one row per dot or more, else FIGlet, else plain text. Cells next to a letter are cleared so the wireframe never touches it.
+  - **Bug fix:** tab 3's mode buttons now close the can't-be-linked list (they returned early when the mode was already selected).
+- **Running time:** `showRounds` is O(L) over the L Links explored, as is the round recording; the search itself is unchanged (D16). `randomActors(k)` is O(A) to copy the pool plus O(k). Each animation frame is O(cells + shown Links).

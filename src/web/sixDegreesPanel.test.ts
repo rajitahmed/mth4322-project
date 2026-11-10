@@ -49,8 +49,9 @@ function setup(chain: ChainToCenter | Error = toXia) {
   });
   const findActorAt = vi.fn(async (_center: string, layer: number, position: number) => (layer === 2 && position === 3 ? xia : kevin));
   const findUnlinked = vi.fn(async (): Promise<UnlinkedPage> => ({ total: 3, actors: [gia] }));
+  const randomActors = vi.fn(async (_count: number) => [xia]);
   const { stage, scenes, finish, click } = fakeStage();
-  const panel = createSixDegreesPanel(search, { findLayers, findChain, findActorAt, findUnlinked }, stage);
+  const panel = createSixDegreesPanel(search, { findLayers, findChain, findActorAt, findUnlinked, randomActors }, stage);
   document.body.replaceChildren(panel);
   const inputs = [...panel.querySelectorAll("input")];
   const pick = async (field: number, text: string) => {
@@ -62,8 +63,11 @@ function setup(chain: ChainToCenter | Error = toXia) {
   const button = (text: string) => [...panel.querySelectorAll("button")].find((b) => b.textContent === text)!;
   const layers = () => panel.querySelector(".layers")!.textContent;
   const result = () => panel.querySelector<HTMLElement>(".result")!;
+  const graph = () => [...panel.querySelectorAll(".chain li")].map((li) => li.textContent);
   const loaded = (text: string) => vi.waitFor(() => expect(layers()).toContain(text));
-  return { panel, stage, inputs, pick, button, layers, result, loaded, findLayers, findChain, findActorAt, findUnlinked, scenes, finish, click };
+  /** Waits for a chain request to be answered: its animation playing, or its answer shown at once. */
+  const answered = () => vi.waitFor(() => expect(result().textContent).toMatch(/^(following|layer|can't|search failed)/));
+  return { panel, stage, inputs, pick, button, layers, result, graph, loaded, answered, findLayers, findChain, findActorAt, findUnlinked, randomActors, scenes, finish, click };
 }
 
 describe("six degrees panel", () => {
@@ -77,64 +81,93 @@ describe("six degrees panel", () => {
     );
   });
 
-  it("shows the chain from the Center to a picked Actor", async () => {
-    const { pick, button, result, loaded, findChain } = setup();
+  it("is headed 'six degrees of' the Center, and follows a new Center", async () => {
+    const { panel, pick, button, loaded } = setup();
+    await loaded("layer 5");
+    expect(panel.querySelector("h1")!.textContent).toBe("six degrees of Kevin Bacon");
+    await pick(0, "gus");
+    button("[enter]").click();
+    await loaded("can't be linked: 14");
+    expect(panel.querySelector("h1")!.textContent).toBe("six degrees of Gus Price");
+  });
+
+  it("shows the chain from the Center to a picked Actor as a graph, under its Layer and ratings", async () => {
+    const { pick, button, result, graph, loaded, findChain, finish, answered } = setup();
     await loaded("layer 5");
     await pick(1, "xia");
     button("[enter]").click();
-    await vi.waitFor(() => expect(result().textContent).not.toBe(""));
+    await answered();
+    finish();
     expect(findChain).toHaveBeenCalledWith("nm01", "nm14", "shortest");
-    expect(result().textContent).toBe(
-      "layer 2: Kevin Bacon — Low Tide — Sid Moss — Low Tide 2 — Xia Ortiz (rating 12.5, average 6.25)",
-    );
+    expect(result().textContent).toBe("layer 2 · rating 12.5, average 6.25");
+    expect(graph()).toEqual(["@Kevin Bacon1958", "|Low Tide", "@Sid Moss1975", "|Low Tide 2", "@Xia Ortiz1990"]);
     expect(result().classList.contains("not-possible")).toBe(false);
   });
 
+  it("[random actor] picks an Actor, fills the actor field, and shows their chain", async () => {
+    const { inputs, button, loaded, findChain, randomActors } = setup();
+    await loaded("layer 5");
+    button("[random actor]").click();
+    await vi.waitFor(() => expect(findChain).toHaveBeenCalledWith("nm01", "nm14", "shortest"));
+    expect(randomActors).toHaveBeenCalledWith(1);
+    expect(inputs[1]!.value).toBe("Xia Ortiz (1990)");
+  });
+
+  it("[random center] picks an Actor and loads their Layers", async () => {
+    const { inputs, button, loaded, findLayers } = setup();
+    await loaded("layer 5");
+    button("[random center]").click();
+    await vi.waitFor(() => expect(findLayers).toHaveBeenLastCalledWith("nm14"));
+    expect(inputs[1]!.value).toBe(""); // only the center changes
+  });
+
   it("switches to the best-rated chain without reloading the Layers, and back", async () => {
-    const { pick, button, result, loaded, findLayers, findChain } = setup();
+    const { pick, button, result, graph, loaded, findLayers, findChain, finish } = setup();
     await loaded("layer 5");
     expect(button("[shortest link]").getAttribute("aria-pressed")).toBe("true");
     await pick(1, "xia");
     button("[enter]").click();
-    await vi.waitFor(() => expect(result().textContent).toContain("Low Tide"));
+    await vi.waitFor(() => expect(result().textContent).toMatch(/^following/));
     button("[best-rated link]").click();
-    await vi.waitFor(() => expect(result().textContent).toContain("High Noon"));
-    expect(findChain).toHaveBeenLastCalledWith("nm01", "nm14", "best-rated");
-    expect(result().textContent).toBe(
-      "layer 2: Kevin Bacon — High Noon Redux — Sue Nash — High Noon Redux 2 — Xia Ortiz (rating 17.3, average 8.65)",
-    );
+    await vi.waitFor(() => expect(findChain).toHaveBeenLastCalledWith("nm01", "nm14", "best-rated"));
+    await vi.waitFor(() => expect(result().textContent).toMatch(/^following/));
+    finish();
+    expect(result().textContent).toBe("layer 2 · rating 17.3, average 8.65");
+    expect(graph()).toContain("|High Noon Redux");
     expect(button("[best-rated link]").getAttribute("aria-pressed")).toBe("true");
     expect(button("[shortest link]").getAttribute("aria-pressed")).toBe("false");
     button("[shortest link]").click();
-    await vi.waitFor(() => expect(result().textContent).toContain("Low Tide"));
+    await vi.waitFor(() => expect(findChain).toHaveBeenLastCalledWith("nm01", "nm14", "shortest"));
     expect(findLayers).toHaveBeenCalledOnce();
   });
 
   it("uses the chosen mode for the next [enter], and asks for nothing when no chain is shown", async () => {
-    const { pick, button, result, loaded, findChain } = setup();
+    const { pick, button, loaded, findChain } = setup();
     await loaded("layer 5");
     button("[best-rated link]").click();
     expect(findChain).not.toHaveBeenCalled();
     await pick(1, "xia");
     button("[enter]").click();
-    await vi.waitFor(() => expect(result().textContent).toContain("High Noon"));
-    expect(findChain).toHaveBeenCalledWith("nm01", "nm14", "best-rated");
+    await vi.waitFor(() => expect(findChain).toHaveBeenCalledWith("nm01", "nm14", "best-rated"));
   });
 
   it("writes the Center's own chain without ratings", async () => {
-    const { pick, button, result, loaded } = setup({ found: true, distance: 0, actors: [kevin], movies: [], totalRating: 0, averageRating: null, positions: [0] });
+    const { pick, button, result, graph, loaded, answered, finish } = setup({ found: true, distance: 0, actors: [kevin], movies: [], totalRating: 0, averageRating: null, positions: [0] });
     await loaded("layer 5");
     await pick(1, "kev");
     button("[enter]").click();
-    await vi.waitFor(() => expect(result().textContent).toBe("layer 0: Kevin Bacon"));
+    await answered();
+    finish();
+    expect(result().textContent).toBe("layer 0");
+    expect(graph()).toEqual(["@Kevin Bacon1958"]);
   });
 
   it("says in red when a picked Actor can't be linked", async () => {
-    const { pick, button, result, loaded } = setup({ found: false });
+    const { pick, button, result, loaded, answered } = setup({ found: false });
     await loaded("layer 5");
     await pick(1, "gia");
     button("[enter]").click();
-    await vi.waitFor(() => expect(result().textContent).not.toBe(""));
+    await answered();
     expect(result().textContent).toBe("can't be linked: Gia Quinn shares no chain of movies with Kevin Bacon");
     expect(result().classList.contains("not-possible")).toBe(true);
   });
@@ -151,11 +184,11 @@ describe("six degrees panel", () => {
   });
 
   it("does not reload the Layers when the Center is unchanged", async () => {
-    const { pick, button, result, loaded, findLayers } = setup();
+    const { pick, button, loaded, findLayers, answered } = setup();
     await loaded("layer 5");
     await pick(1, "xia");
     button("[enter]").click();
-    await vi.waitFor(() => expect(result().textContent).not.toBe(""));
+    await answered();
     expect(findLayers).toHaveBeenCalledOnce();
   });
 
@@ -187,20 +220,22 @@ describe("six degrees panel", () => {
   });
 
   it("says the search failed, in plain ink, when the chain request fails", async () => {
-    const { pick, button, result, loaded } = setup(new Error("Chain failed: 500"));
+    const { pick, button, result, loaded, answered } = setup(new Error("Chain failed: 500"));
     await loaded("layer 5");
     await pick(1, "xia");
     button("[enter]").click();
-    await vi.waitFor(() => expect(result().textContent).toBe("search failed, try again"));
+    await answered();
+    expect(result().textContent).toBe("search failed, try again");
     expect(result().classList.contains("not-possible")).toBe(false);
   });
 
   it("does nothing until an Actor is picked", async () => {
-    const { button, result, loaded, findChain } = setup();
+    const { button, result, loaded, findChain, finish } = setup();
     await loaded("layer 5");
+    finish();
     button("[enter]").click();
     expect(findChain).not.toHaveBeenCalled();
-    expect(result().textContent).toBe("");
+    expect(result().textContent).toBe("pick an actor, or click a dot on the rings");
   });
 
   it("plays the rings for the Center once its Layers are loaded, and again for a new Center", async () => {
@@ -215,17 +250,17 @@ describe("six degrees panel", () => {
     expect(scenes).toHaveLength(2);
   });
 
-  it("draws a found chain in green on the rings, hiding the result line while it plays", async () => {
-    const { pick, button, result, loaded, scenes, finish } = setup();
+  it("draws a found chain in green on the rings, showing the answer only once it has played", async () => {
+    const { pick, button, result, graph, loaded, scenes, finish } = setup();
     await loaded("layer 5");
     await pick(1, "xia");
     button("[enter]").click();
     await vi.waitFor(() => expect(scenes).toHaveLength(2));
     expect(endInks(scenes[1]!).has("green")).toBe(true);
-    expect(result().hidden).toBe(true);
+    expect(result().textContent).toBe("following the chain back to Kevin Bacon…");
+    expect(graph()).toEqual([]);
     finish();
-    expect(result().hidden).toBe(false);
-    expect(result().textContent).toContain("Low Tide");
+    expect(graph()).toContain("|Low Tide");
   });
 
   it("redraws the chain when the mode changes", async () => {
@@ -236,8 +271,7 @@ describe("six degrees panel", () => {
     await vi.waitFor(() => expect(scenes).toHaveLength(2));
     button("[best-rated link]").click();
     await vi.waitFor(() => expect(scenes).toHaveLength(3));
-    await vi.waitFor(() => expect(result().textContent).toContain("High Noon"));
-    expect(scenes[2]).not.toEqual(scenes[1]);
+    expect(scenes[2]!.steps).not.toEqual(scenes[1]!.steps);
   });
 
   it("draws nothing new for an Actor who can't be linked", async () => {
@@ -247,11 +281,10 @@ describe("six degrees panel", () => {
     button("[enter]").click();
     await vi.waitFor(() => expect(result().textContent).toContain("can't be linked"));
     expect(scenes).toHaveLength(1);
-    expect(result().hidden).toBe(false);
   });
 
   it("picking a dot asks who it stands for, puts them in the actor field, and draws their chain", async () => {
-    const { inputs, result, loaded, scenes, click, findActorAt, findChain } = setup();
+    const { inputs, graph, loaded, scenes, click, findActorAt, findChain, finish } = setup();
     await loaded("layer 5");
     const dot = layoutRings(aroundKevin.layerCounts, FAKE_COLUMNS, FAKE_ROWS).rings[2]!.dots[3]!;
     click({ x: dot.x, y: dot.y });
@@ -259,7 +292,8 @@ describe("six degrees panel", () => {
     expect(findActorAt).toHaveBeenCalledWith("nm01", 2, 3);
     expect(findChain).toHaveBeenCalledWith("nm01", "nm14", "shortest");
     expect(inputs[1]!.value).toBe("Xia Ortiz (1990)");
-    expect(result().textContent).toContain("layer 2: Kevin Bacon");
+    finish();
+    expect(graph()[0]).toBe("@Kevin Bacon1958");
   });
 
   it("does nothing for a click far from every dot", async () => {

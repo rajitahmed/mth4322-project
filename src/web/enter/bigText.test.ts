@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bigText } from "./bigText";
+import { bigText, dotText, scaleDots } from "./bigText";
 
 describe("bigText", () => {
   it("sets MOVIE over STATISTICS, centred, in rows of equal width", () => {
@@ -16,5 +16,19 @@ describe("bigText", () => {
 
   it("uses plain ASCII line characters only", () => {
     expect(bigText(["MOVIE", "STATISTICS"]).join("")).toMatch(/^[ _|/\\()V]*$/);
+  });
+});
+
+describe("dot font", () => {
+  it("sets the words in 7-row dots with two blank rows between, centred", () => {
+    const rows = dotText(["MOVIE", "STATISTICS"]);
+    expect(rows).toHaveLength(16);
+    expect(rows[0]!.length).toBe(59); // 10 letters of 5, 9 gaps
+    expect(rows[7]).toBe(".".repeat(59));
+  });
+
+  it("scales the dots to any size, keeping them square on cells twice as tall as wide", () => {
+    const scaled = scaleDots(["#.", ".#"], 1.5, 2);
+    expect(scaled).toEqual(["●●●   ", "●●●   ", "   ●●●"]);
   });
 });

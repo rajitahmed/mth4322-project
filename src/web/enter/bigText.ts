@@ -23,3 +23,35 @@ export function bigText(words: string[]): string[] {
   const centre = (row: string) => row.padStart(Math.floor((width + row.length) / 2)).padEnd(width);
   return blocks.flatMap((block, i) => [...(i > 0 ? [""] : []), ...block].map(centre));
 }
+
+/** The same letters as a 5 × 7 dot font (`#` a dot), for screens where the title can be larger than bigText's. */
+const DOTS: Record<string, string[]> = {
+  A: [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+  C: [".###.", "#...#", "#....", "#....", "#....", "#...#", ".###."],
+  E: ["#####", "#....", "#....", "####.", "#....", "#....", "#####"],
+  I: [".###.", "..#..", "..#..", "..#..", "..#..", "..#..", ".###."],
+  M: ["#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#"],
+  O: [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+  S: [".####", "#....", "#....", ".###.", "....#", "....#", "####."],
+  T: ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."],
+  V: ["#...#", "#...#", "#...#", "#...#", "#...#", ".#.#.", "..#.."],
+};
+
+/** The words in the dot font, one under another with two blank rows between, centred: `#` a dot, `.` none. */
+export function dotText(words: string[]): string[] {
+  const lines = words.map((w) => Array.from({ length: 7 }, (_, row) => [...w].map((c) => DOTS[c]![row]).join(".")));
+  const width = Math.max(...lines.map((l) => l[0]!.length));
+  const centre = (row: string) => row.padStart(Math.floor((width + row.length) / 2), ".").padEnd(width, ".");
+  return lines.flatMap((line, i) => [...(i > 0 ? [".", "."] : []), ...line].map(centre));
+}
+
+/**
+ * `dots` drawn `scale` rows per dot (and `scale` × `aspect` columns, so dots stay square), each dot
+ * as a `●`: the marquee lights of a cinema sign. Nearest-neighbour, so any scale works.
+ */
+export function scaleDots(dots: string[], scale: number, aspect: number): string[] {
+  const [rows, columns] = [Math.round(dots.length * scale), Math.round(dots[0]!.length * scale * aspect)];
+  return Array.from({ length: rows }, (_, y) =>
+    Array.from({ length: columns }, (_, x) => (dots[Math.floor(y / scale)]![Math.floor(x / (scale * aspect))] === "#" ? "●" : " ")).join(""),
+  );
+}

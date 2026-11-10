@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { type Cell, type Grid, rowText } from "../stage/charGrid";
 import { dotOf, layoutRings } from "./ringsLayout";
-import { ringsScene } from "./ringsScene";
+import { ringsScene as playRings, type RingsRun } from "./ringsScene";
+
+/** The rings around "Kevin Bacon" with these counts, and the chain at these positions (its Actors named "A0", "A1", …). */
+function runOf(layerCounts: number[], chain: number[] | null): RingsRun {
+  const named = chain && { positions: chain, names: chain.map((_, i) => (i === 0 ? "Kevin Bacon" : `A${i}`)), movies: chain.slice(1).map((_, i) => `Film ${i}`) };
+  return { center: "Kevin Bacon", layerCounts, unlinkedCount: 3, chain: named };
+}
+const ringsScene = (counts: number[], chain: number[] | null) => playRings(runOf(counts, chain));
 
 const [COLUMNS, ROWS] = [100, 30];
 const TINY = [1, 3, 4, 4, 1, 1];
@@ -79,6 +86,22 @@ describe("ringsScene, the rings", () => {
     }
   });
 
+  it("names the Center under it, and tells one step per Layer, then who can't be linked", () => {
+    const scene = ringsScene(TINY, null);
+    expect(screenText(scene.frame(0, COLUMNS, ROWS))).toContain("Kevin Bacon");
+    const steps = scene.steps.map((s) => s.text);
+    expect(steps).toHaveLength(7);
+    expect(steps[1]).toBe("layer 1: 3 actors are 1 link from Kevin Bacon");
+    expect(steps[6]).toBe("3 actors can't be linked to Kevin Bacon: they are in another group");
+  });
+
+  it("keeps a dotted sweep turning over the rings once they are drawn", () => {
+    const scene = ringsScene(BACON, null);
+    const dim = (t: number) => scene.frame(t, COLUMNS, ROWS).inks.filter((ink) => ink === "ink-dim").length;
+    expect(dim(scene.duration)).toBe(0);
+    expect(dim(scene.duration + 1)).toBeGreaterThan(0);
+  });
+
   it("draws the same picture on every run", () => {
     expect(lastFrame(BACON, null)).toEqual(lastFrame(BACON, null));
   });
@@ -111,6 +134,18 @@ describe("ringsScene, a chain", () => {
     const firstGold = all.find(({ grid }) => grid.inks.includes("spark"))!.t;
     const allGreen = all.find(({ grid }) => at(grid, chainCell(TINY, XIA, 0)).ink !== "accent")!.t;
     expect(firstGold).toBeGreaterThanOrEqual(allGreen);
+  });
+
+  it("names each chain Actor as it is reached, and tells each Link back to the Center", () => {
+    const scene = ringsScene(TINY, XIA);
+    expect(scene.steps.map((s) => s.text)).toEqual([
+      "A2 is in layer 2: follow the chain back to Kevin Bacon",
+      "A2 → A1 (Film 1), layer 2 to 1",
+      "A1 → Kevin Bacon (Film 0), layer 1 to 0",
+      "Kevin Bacon reached: A2 is 2 links away",
+    ]);
+    expect(screenText(scene.frame(scene.duration, COLUMNS, ROWS))).toContain("A1");
+    expect(screenText(scene.frame(0, COLUMNS, ROWS))).not.toContain("A1");
   });
 
   it("draws the Center's own chain as the Center alone", () => {

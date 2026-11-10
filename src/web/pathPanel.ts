@@ -1,52 +1,72 @@
-import type { FoundPath, ShortestPath } from "../shared/types";
+import type { ActorSummary, FoundPath, ShortestPath } from "../shared/types";
 import { createActorField, type SearchActors } from "./actorField";
 import { button } from "./button";
-import { chainText } from "./chainText";
+import { createHeading } from "./heading";
 import { linkingOf } from "./linking/linkLayout";
 import { linkingScene } from "./linking/linkingScene";
+import { createReport, type Report } from "./report";
 import type { Stage } from "./stage/stage";
 
-export type FindPath = (a: string, b: string) => Promise<ShortestPath>;
-export type FindLargestPath = () => Promise<FoundPath>;
-
-/** The result line: the Distance and the chain, or why there is none. */
-export function pathLine(path: ShortestPath): string {
-  if (!path.found) return "no path: these actors share no chain of movies";
-  return `distance ${path.distance}: ${chainText(path)}`;
+/** What tab 1 asks the server (`api.ts`). */
+export interface PathApi {
+  searchActors: SearchActors;
+  findPath(a: string, b: string): Promise<ShortestPath>;
+  findLargestPath(): Promise<FoundPath>;
+  randomActors(count: number): Promise<ActorSummary[]>;
 }
 
-/** Tab 1: `[largest path]` (no input), the optional two Actor fields with `[enter]`, the stage, and the result line. */
-export function createPathPanel(
-  searchActors: SearchActors,
-  findPath: FindPath,
-  findLargestPath: FindLargestPath,
-  stage: Stage,
-): HTMLElement {
+/** The finished answer: the Distance and the chain as a graph, or why there is none. */
+export function showPath(report: Report, path: ShortestPath): void {
+  if (!path.found) return report.show("no path: these actors share no chain of movies", null, "not-possible");
+  report.show(`distance ${path.distance}`, path, "answer");
+}
+
+/**
+ * Tab 1: the heading; `[largest path]` (no input), the two Actor fields, `[random]` and `[enter]`; then
+ * the stage beside the report. While the search plays the report names the two ends; at the end it
+ * shows the answer.
+ */
+export function createPathPanel(api: PathApi, stage: Stage): HTMLElement {
   const element = document.createElement("section");
+  const heading = createHeading("largest path", "the two actors furthest apart, or the shortest chain of movies between any two");
   const fields = document.createElement("div");
   fields.className = "fields";
   const largestButton = button("[largest path]");
-  const a = createActorField("actor a", searchActors);
-  const b = createActorField("actor b", searchActors);
+  const a = createActorField("actor a", api.searchActors);
+  const b = createActorField("actor b", api.searchActors);
+  const random = button("[random]");
   const enter = button("[enter]");
-  fields.append(largestButton, a.element, b.element, enter);
-  const result = document.createElement("p");
-  result.className = "result";
-  element.append(fields, stage.element, result);
+  fields.append(largestButton, a.element, b.element, random, enter);
+  const report = createReport();
+  const workspace = document.createElement("div");
+  workspace.className = "workspace";
+  workspace.append(stage.element, report.element);
+  element.append(heading.element, fields, workspace);
+  report.show("pick two actors, or find the [largest path]");
 
-  /** Runs a search, plays it on the stage, then shows the result line. */
-  const show = async (request: () => Promise<ShortestPath>, picked: [string, string] | null) => {
+  let latest = 0; // only the newest request may change the screen
+  /** Runs a search, plays it on the stage, then shows the answer in the report. */
+  const show = async (request: () => Promise<ShortestPath>, picked: [ActorSummary, ActorSummary] | null) => {
+    const asked = ++latest;
+    report.show("searching…");
     const path = await request().catch(() => null);
-    result.textContent = path ? pathLine(path) : "search failed, try again";
-    result.classList.toggle("not-possible", path !== null && !path.found);
-    result.hidden = false;
-    if (path) stage.play(linkingScene(linkingOf(path, picked)), (playing) => (result.hidden = playing));
+    if (asked !== latest) return;
+    if (!path) return report.show("search failed, try again");
+    const linking = linkingOf(path, picked);
+    const [from, to] = linking.ends.map((id) => linking.names[id]);
+    stage.play(linkingScene(linking), (playing) => (playing ? report.show(`searching: ${from} and ${to}`) : showPath(report, path)));
   };
-  largestButton.addEventListener("click", () => show(findLargestPath, null));
+  largestButton.addEventListener("click", () => show(api.findLargestPath, null));
   enter.addEventListener("click", () => {
-    const actorA = a.selected();
-    const actorB = b.selected();
-    if (actorA && actorB) show(() => findPath(actorA.id, actorB.id), [actorA.id, actorB.id]);
+    const [actorA, actorB] = [a.selected(), b.selected()];
+    if (actorA && actorB) show(() => api.findPath(actorA.id, actorB.id), [actorA, actorB]);
+  });
+  random.addEventListener("click", async () => {
+    const picked = await api.randomActors(2).catch(() => null);
+    if (!picked) return report.show("search failed, try again");
+    a.set(picked[0]!);
+    b.set(picked[1]!);
+    enter.click();
   });
   return element;
 }

@@ -21,4 +21,16 @@ describe("tabs", () => {
     expect(visible().map((p) => p.textContent)).toEqual(["three"]);
     expect(tabs.map((t) => t.getAttribute("aria-selected"))).toEqual(["false", "false", "true"]);
   });
+
+  it("names the browser tab after the tab shown: its heading, or else its name", () => {
+    const withHeading = panel("");
+    withHeading.append(Object.assign(document.createElement("h1"), { textContent: "six degrees of Kevin Bacon" }));
+    const element = createTabs([
+      { name: "largest path", panel: panel("one") },
+      { name: "six degrees of bacon", panel: withHeading },
+    ]);
+    expect(document.title).toBe("largest path · MOVIE STATISTICS");
+    element.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1]!.click();
+    expect(document.title).toBe("six degrees of Kevin Bacon · MOVIE STATISTICS");
+  });
 });
