@@ -614,3 +614,41 @@ Algorithmic decisions for the 3 operations and the data filter, in chronological
   - **Standards, left as is:** the (Layer, position) and (columns, rows) pairs (two numbers, used in a handful of places; a type would add more than it saves, YAGNI); `toLocaleString("en-US")` in four places (one call each); the tuned stage height in CSS (the same approach as tabs 1 and 2).
   - **Spec, fixed:** a stage resized while hidden was left blank (above).
   - **Spec, kept and flagged:** weight by count rather than by Layer; the legend column; a heavy dot picks its first Actor; a click during the growth may pick a dot not yet shown; after a failed Center load the old rings stay on screen and clicks on them do nothing (the result line says the search failed).
+
+## D26: Real data locally: commit the CSV files, measure memory and startup, and keep the code as it is (all operations, ticket #13)
+
+- **Date:** 2026-11-10
+- **Decisions:**
+  - **The real CSV files are committed** to `data/imdb/` (29,705 Movies, 119,458 Actors, 271,435 credits; 1.2 + 3.3 + 5.5 MB). They are made by the data script (D15) from the IMDb files of 2026-11-10. The server reads them directly, so a deploy (#14) needs no download and no filtering step (ADR 0002).
+    - Alternative: run the data script on the server at startup. Rejected: it downloads ~1.3 GB and its hash join holds far more memory than 512 MB allows. D15 already makes it an offline script.
+  - **No memory work: the measured peak is under 512 MB, so the code stays as it is (YAGNI).** Measured on Windows 11, Node 23.6.1, `DATA_DIR=data/imdb npm start`. Each phase was timed separately in a throwaway script:
+
+    | Phase | Time | RSS after |
+    |---|---|---|
+    | Read and parse the three CSV files | ~0.65 s | 254 MB |
+    | Build the graph (CSR, Groups, D13) | ~0.34 s | 286 MB |
+    | iFUB: the largest finite shortest path and its chain (D17) | ~14.2 s | 356 MB |
+    | Kevin Bacon's Layers and best-rated parents (D18, D19) | ~0.15 s | 258 MB |
+    | Blocks and the block–cut forest (D20) | ~0.19 s | 283 MB |
+
+    - **Startup:** ~15.7 s from launch to listening (iFUB is ~90 % of it).
+    - **Peak RSS:** 439–468 MB over five runs, always during startup (the peak is in the process's peak working set, `process.resourceUsage().maxRSS`). After startup the server sits at ~130 MB working set (~140 MB private). Five Cycle searches (3 to 6 Chosen Actors, each in its own worker, D9/D21) took 0.2–0.7 s each and did not raise the peak.
+    - **The peak is mostly garbage the GC has not collected yet, not data the server needs.** With the V8 heap capped (`--max-old-space-size`) the server still starts and answers every tab: at 256 MB the peak is 440 MB, at 160 MB it is 378 MB (startup 20.8 s, as the GC runs more often). V8 frees memory sooner when it has less room. Node also sizes its heap from the container's memory limit, so on Render the real peak should be at or below what was measured here. #14 checks this on Render itself.
+    - Alternatives considered, all rejected for now because the measured peak already fits:
+      - **Reuse one set of BFS arrays across iFUB's ~430 searches** instead of allocating new `Int32Array`s per search. It would cut the garbage iFUB makes, but it adds a reset step to the one shared BFS (D16) and couples every operation to it.
+      - **Stream the CSV parse** instead of reading each file into one string first. It saves the strings' tens of MB, but the parse is not where the peak is (RSS 254 MB after it, peak later).
+      - **Set `--max-old-space-size` in `npm start`.** It lowers the peak (above) but also hides the real need and slows startup. Kept as the first fix to try if Render reports memory trouble (#14).
+  - **The server now prints its startup time and memory** (`Started in … ms, memory … MB (peak … MB)`), next to the existing lines for loading and the largest path, so the same numbers can be read in Render's logs (#14) without a separate tool.
+- **Checked on the real data:**
+  - The autocomplete finds Kevin Bacon (1958), Meryl Streep, Denzel Washington and Tom Hanks.
+  - Tab 1: Kevin Bacon → Leonardo DiCaprio is Distance 2 via Brad Pitt. `[largest path]` returns Distance 12 (325 KB) and draws in Chrome.
+  - Tab 2: Bacon, DiCaprio and Streep form a Cycle of 4, and adding Denzel Washington, Tom Hanks and Brad Pitt gives Cycles of 6. Bacon with the two ends of the largest path is not possible, with Isabel Ruth as the cut actor. These were checked through the API: in Chrome, typing in the actor fields did not reach the page.
+  - Tab 3: Kevin Bacon's Layers 1, 320, 13,060, 51,640, 39,764, 8,067, 786, 140, 5,680 can't be linked, and the rings draw in Chrome. The best-rated chain to DiCaprio runs through Jack Nicholson.
+- **Running time:** unchanged. Startup is O(A + M + C) to load plus O(k·(A + M + C)) for iFUB with k ≈ 430 (D17), plus one BFS for the default Center (D18) and O(A + M + C) for the blocks (D20). Memory is O(A + M + C) for the graph, plus O(A + M) per BFS held at a time.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Standards, fixed:** the elapsed-time rounding was repeated three times in `main.ts` and is now one `elapsedMs` helper. A comment now says `maxRSS` is in kilobytes.
+  - **Spec, fixed:** the README gave the peak as one number (~460 MB). It now gives the measured range (440–470 MB).
+  - **Spec, kept and flagged:**
+    - Tab 2 was checked through the API but not clicked through in Chrome, because the automation's typing did not reach the page. A human should click through it once.
+    - The headroom under 512 MB is thin (~45 MB) on Windows working-set numbers. #14 measures it on Render.
+    - The new startup log line is a small extra the ticket did not ask for. It is kept so #14 can read the same numbers in Render's logs.

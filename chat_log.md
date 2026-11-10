@@ -771,3 +771,35 @@ A chronological log of how this application is being built. There is one entry p
     - a click during the growth may pick a not-yet-drawn dot.
 - **Verified:** `npm run typecheck` is clean. `npm test` (all tests pass) and `npm run build` are OK.
 - **Committed** to `main`.
+
+## 2026-11-10: Ticket #13 implemented (real data running locally)
+
+- **Asked:** `/implement` ticket #13. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Explored:**
+  - Ticket #13 (`gh issue view 13 --json …`) and ADR 0002.
+  - `src/server/main.ts`, `operations.ts`, `dataset.ts`, `cycleWorker.ts`, the README, and DECISIONS D17–D20.
+  - `data/imdb/` already held the three CSV files from the data script (29,705 Movies, 119,458 Actors, 271,435 credits), not yet committed.
+- **Measured (recorded as D26):**
+  - Each startup phase was timed in a throwaway script. Reading the CSV files takes ~0.65 s, building the graph ~0.34 s, iFUB ~14.2 s, Kevin Bacon's Layers ~0.15 s, and the blocks ~0.19 s. Startup takes ~15.7 s in all.
+  - Peak RSS is 439–468 MB, reached during startup. After startup the server holds ~130 MB. Cycle searches (3–6 Chosen Actors, 0.2–0.7 s each) did not raise the peak.
+  - With the heap capped at 256 MB the peak was 440 MB, and at 160 MB it was 378 MB. The server worked in both runs, so most of the peak is uncollected garbage.
+- **Decided (D26):**
+  - Commit the CSV files.
+  - Make no memory changes, because the peak is under 512 MB (YAGNI). Reusing the BFS arrays, streaming the CSV parse and a heap flag were considered and kept as fixes for #14 if Render needs them.
+  - The server now logs its startup time and memory.
+- **Changed:**
+  - `src/server/main.ts` logs `Started in … ms, memory … MB (peak … MB)`, with `elapsedMs` and `megabytes` helpers.
+  - The README now describes the committed data, the run command, and the startup time and memory.
+- **Checked on the real data:**
+  - Through the API, all 3 tabs work: autocomplete, shortest path, the largest path (Distance 12), Cycles of 4 and 6, a cut-actor case, the Six Degrees Layers, and the best-rated chain.
+  - In Chrome, the enter screen, tab 1's largest path animation and tab 3's rings were shown.
+  - Tab 2 in Chrome was **not** checked: the automation's typing did not reach the actor fields. It is flagged for a manual click-through.
+  - The server and the browser tab were closed afterwards.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - Fixed:
+    - repeated elapsed-time rounding, now one `elapsedMs` helper;
+    - a comment added on `maxRSS` units;
+    - the README now gives the peak as a range.
+  - Flagged to the user: tab 2 has not been clicked through in Chrome; the headroom under 512 MB is thin (~45 MB); the log line is a small addition the ticket did not ask for.
+- **Verified:** `npm run typecheck` is clean, `npm test` passes, and `npm run build` is OK.
+- **Committed** to `main`.

@@ -17,11 +17,17 @@ For development, run `npm run dev:server` and `npm run dev:web` side by side, th
 
 ## Data
 
-The app reads three CSV files. `data/tiny` holds a small hand-made dataset for tests. The real data comes from the [IMDb non-commercial datasets](https://developer.imdb.com/non-commercial-datasets), filtered by an offline script that you run on your own computer (not on the server):
+The app reads three CSV files. `data/tiny` holds a small hand-made dataset for tests. `data/imdb` holds the real data (29,705 Movies, 119,458 Actors, 271,435 credits, about 10 MB), committed with the app:
+
+```sh
+npm run build
+DATA_DIR=data/imdb npm start   # ready after ~16 s; peak memory 440–470 MB, ~130 MB after startup (DECISIONS D26)
+```
+
+The real data comes from the [IMDb non-commercial datasets](https://developer.imdb.com/non-commercial-datasets), filtered by an offline script that you run on your own computer (not on the server). Run it again only to refresh the data:
 
 ```sh
 npm run data       # writes data/imdb/{movies,actors,credits}.csv
-DATA_DIR=data/imdb npm start
 ```
 
 The script downloads `title.ratings`, `title.basics`, `title.principals` and `name.basics` (`.tsv.gz`, about 1.3 GB in total) into `data/imdb-raw/`, which git ignores. A file already there is reused, not downloaded again; delete it to fetch a newer copy. It keeps feature films (title type `movie`) rated at least 6.1 from at least 1,100 votes, and the actors and actresses in their principal cast (DECISIONS D15).
