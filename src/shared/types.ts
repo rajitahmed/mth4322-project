@@ -4,3 +4,28 @@ export interface ActorSummary {
   name: string;
   birthYear: number | null;
 }
+
+/** A Movie as the front end sees it. */
+export interface MovieSummary {
+  id: string;
+  title: string;
+}
+
+/** Which end of a two-sided search: the search from Actor a or from Actor b. */
+export type SearchSide = "a" | "b";
+
+/** A Link a search tried, by id, and which end's search tried it (for the animation). */
+export interface ExploredLink {
+  from: string;
+  movie: string;
+  to: string;
+  side: SearchSide;
+}
+
+/**
+ * Shortest path between two Actors. The Distance is the answer; the chain is one
+ * example: `movies[i]` links `actors[i]` and `actors[i + 1]`.
+ */
+export type ShortestPath =
+  | { found: true; distance: number; actors: ActorSummary[]; movies: MovieSummary[]; explored: ExploredLink[] }
+  | { found: false; explored: ExploredLink[] };

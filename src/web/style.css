@@ -85,3 +85,19 @@ input {
 .suggestions li:hover {
   color: var(--accent);
 }
+
+.fields button {
+  cursor: pointer;
+}
+
+.fields button:hover {
+  color: var(--accent);
+}
+
+.result {
+  font-size: 24px;
+}
+
+.result.not-possible {
+  color: var(--red);
+}

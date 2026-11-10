@@ -278,3 +278,24 @@ A chronological log of how this application is being built. There is one entry p
 
 - **Asked:** push the work and close ticket #2.
 - **Done:** pushed `main` (`b779b39`) to GitHub and closed issue #2 with a comment linking the commit, the real-run counts and D15.
+
+---
+
+## 2026-11-10: Ticket #3 implemented (tab 1: shortest path between two Actors)
+
+- **Asked:** `/implement` ticket #3. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Read:** issue #3, `DECISIONS.md` D1, D2, D4, D13, `algorithms.md` §4, `data/tiny/ANSWERS.md`, `design.md` (result line, fully red "not possible"), `CONTEXT.md`, and the existing graph, operations, API and web code.
+- **Built (tests first, at the operations seam, then the API, then the tab):**
+  - `src/server/bfs.ts`: the one BFS in the codebase. `startSearch`, `expandFrontier` (moves the whole frontier out by one Link, Actor → Movie → Actor, and returns the new Actors in index order), and `chainTo` (walks the parents back).
+  - `src/server/shortestPath.ts`: bidirectional BFS on top of it. The side with the smaller frontier steps (side a on a tie), meetings are checked on the newly reached Actors and the shortest wins (lowest index on a tie), and an empty frontier means "no path". It returns the Distance, the chain, and the explored Links (from, Movie, to, side).
+  - `operations.shortestPath(a, b)` maps indices to ids (`ShortestPath`, `MovieSummary`, `ExploredLink`, `SearchSide` in `src/shared/types.ts`); an unknown id throws `UnknownActorError`.
+  - `GET /api/path?a=…&b=…`: 404 for an unknown Actor (mapped in the API's error handler), 400 for a missing one.
+  - `src/web/pathPanel.ts`: tab 1 now has the two Actor fields, `[enter]`, and a 24px result line, `distance 4: Kevin Bacon — Open Road — Ada Hart — …`, or a fully red `no path: these actors share no chain of movies`.
+- **Tests:** paper answers Kevin → Dev = 4 and Pia → Xia = 7, a check that each chain is valid (right endpoints, right length, no repeated Actor, every Movie has both Actors), Distance 1 and 0, the lowest-id tie chain, different Groups → no path, explored Links are real and include the chain, unknown id; API 200/404/400; the panel's result line, red "no path", a failed request, and nothing before both Actors are picked.
+- **Decision recorded: D16.** One BFS stepped one Link at a time and reused by every operation; each side marks its own Movies; meetings are checked on Actors only; tie rules; explored Links = the two search trees (not every Link looked at, to keep the payload small); errors.
+- **Real data check:** ten pairs of well-known Actors take 2–7 ms each and explore 250–680 Links. Kevin Bacon → Leonardo DiCaprio = 2 (via Brad Pitt: *Sleepers*, *Once Upon a Time in... Hollywood*).
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Standards:** no hard violations. Fixed: renamed `expandLayer` → `expandFrontier` and `source` → `start` (CONTEXT.md ties Layer to the Center and avoids "source"); one `SearchSide` type instead of `"a" | "b"` four times; the 404 moved out of the operations module into the API's error handler; renamed `actor`/`movie` helpers to `actorAt`/`movieAt` (they were shadowed); the test file builds the graph once; the panel's `search` parameter is now `searchActors`. Left as is: `shortestPath.ts` keeps its own index-based `ExploredLink`/`PathResult` (the server works in indices, the shared types in ids).
+  - **Spec:** every criterion met and the bidirectional BFS judged correct. Fixed: the panel now shows "search failed, try again" (plain ink, not red, since red means only "not possible") when the request fails; `MovieSummary` trimmed to id and title (year and rating were unused, YAGNI). Left as is: explored Links are the search trees only (D16 explains why); the lowest-id tie test stays, because D13 requires the same pair to always give the same chain.
+- **Verified:** `npm run typecheck` clean; `npm test` 53 tests, all pass; `npm run build` OK.
+- **Committed** to `main`.

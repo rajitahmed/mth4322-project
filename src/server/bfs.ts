@@ -1,0 +1,61 @@
+import { actorsIn, type Graph, moviesOf } from "./graph";
+
+/**
+ * One breadth-first search on the actor–movie graph (DECISIONS D2, D16). The only
+ * BFS in the codebase: every operation drives it one Link at a time with
+ * `expandFrontier`, so a single search and a two-sided search share the same code.
+ */
+export interface Search {
+  /** Distance in Links from the start Actor, or -1 if not reached yet. */
+  distance: Int32Array;
+  /** The Actor and Movie each reached Actor was discovered through (-1 for the start Actor). */
+  parentActor: Int32Array;
+  parentMovie: Int32Array;
+  /** Movies already expanded: each Movie releases its Actors once per search. */
+  movieSeen: Uint8Array;
+}
+
+export function startSearch(graph: Graph, start: number): Search {
+  const search: Search = {
+    distance: new Int32Array(graph.actors.length).fill(-1),
+    parentActor: new Int32Array(graph.actors.length).fill(-1),
+    parentMovie: new Int32Array(graph.actors.length).fill(-1),
+    movieSeen: new Uint8Array(graph.movies.length),
+  };
+  search.distance[start] = 0;
+  return search;
+}
+
+/**
+ * Moves the search out by one Link: Actor → Movie → Actor. Returns the newly
+ * reached Actors, lowest index first. Frontier Actors and their Movies are
+ * walked in index order, so each Actor's parent is the lowest-index one.
+ */
+export function expandFrontier(graph: Graph, search: Search, frontier: Int32Array): Int32Array {
+  const next: number[] = [];
+  for (const actor of frontier) {
+    for (const movie of moviesOf(graph, actor)) {
+      if (search.movieSeen[movie]) continue;
+      search.movieSeen[movie] = 1;
+      for (const costar of actorsIn(graph, movie)) {
+        if (search.distance[costar] !== -1) continue;
+        search.distance[costar] = search.distance[actor]! + 1;
+        search.parentActor[costar] = actor;
+        search.parentMovie[costar] = movie;
+        next.push(costar);
+      }
+    }
+  }
+  return Int32Array.from(next).sort();
+}
+
+/** The chain from the start Actor to a reached Actor: Actors and the Movies linking them. */
+export function chainTo(search: Search, actor: number): { actors: number[]; movies: number[] } {
+  const actors = [actor];
+  const movies: number[] = [];
+  for (let a = actor; search.parentActor[a] !== -1; a = search.parentActor[a]!) {
+    movies.push(search.parentMovie[a]!);
+    actors.push(search.parentActor[a]!);
+  }
+  return { actors: actors.reverse(), movies: movies.reverse() };
+}

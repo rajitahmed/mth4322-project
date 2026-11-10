@@ -1,5 +1,6 @@
 import { createActorField } from "./actorField";
-import { searchActors } from "./api";
+import { findPath, searchActors } from "./api";
+import { createPathPanel } from "./pathPanel";
 import { createTabs } from "./tabs";
 
 /** One tab's panel: its row of actor fields. */
@@ -18,7 +19,7 @@ title.textContent = "MOVIE STATISTICS";
 document.body.append(
   title,
   createTabs([
-    { name: "largest path", panel: panel("actor a", "actor b") },
+    { name: "largest path", panel: createPathPanel(searchActors, findPath) },
     { name: "shortest cycle", panel: panel("actor 1", "actor 2", "actor 3") },
     { name: "six degrees of bacon", panel: panel("center") },
   ]),
