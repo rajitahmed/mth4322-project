@@ -6,6 +6,7 @@ import type {
   LayerSummary,
   ShortestCycle,
   ShortestPath,
+  UnlinkedPage,
 } from "../shared/types";
 
 export async function searchActors(query: string): Promise<ActorSummary[]> {
@@ -39,6 +40,22 @@ export async function findChainToCenter(center: string, actor: string, mode: Cha
     `/api/six-degrees/chain?center=${encodeURIComponent(center)}&actor=${encodeURIComponent(actor)}&mode=${mode}`,
   );
   if (!response.ok) throw new Error(`Chain failed: ${response.status}`);
+  return response.json();
+}
+
+/** Who a dot on the rings stands for: the Actor at `position` in Layer `layer` around a Center. */
+export async function findActorAt(center: string, layer: number, position: number): Promise<ActorSummary> {
+  const response = await fetch(`/api/six-degrees/layer-actor?center=${encodeURIComponent(center)}&layer=${layer}&position=${position}`);
+  if (!response.ok) throw new Error(`Layer actor failed: ${response.status}`);
+  return response.json();
+}
+
+/** One page of the Actors who can't be linked to a Center, filtered by name. */
+export async function findUnlinked(center: string, query: string, offset: number, limit: number): Promise<UnlinkedPage> {
+  const response = await fetch(
+    `/api/six-degrees/unlinked?center=${encodeURIComponent(center)}&q=${encodeURIComponent(query)}&offset=${offset}&limit=${limit}`,
+  );
+  if (!response.ok) throw new Error(`Unlinked failed: ${response.status}`);
   return response.json();
 }
 

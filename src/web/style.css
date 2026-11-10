@@ -43,7 +43,14 @@ input {
 }
 
 .modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
   margin-top: 16px;
+}
+
+.modes button[aria-expanded="true"] {
+  color: var(--accent);
 }
 
 .modes button {
@@ -117,10 +124,40 @@ input {
   color: var(--red);
 }
 
-.layers {
-  margin: 16px 0 0;
+/* Page text for screen readers only (tab 3's counts are drawn on the stage). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.unlinked ul {
+  margin: 16px 0;
   padding: 0;
   list-style: none;
+}
+
+.pager {
+  display: flex;
+  gap: 24px;
+}
+
+.pager button {
+  cursor: pointer;
+}
+
+.pager button:hover {
+  color: var(--accent);
+}
+
+/* design.md: no opacity fades, so a disabled button is drawn in --ink-dim. */
+.pager button:disabled,
+.pager button:disabled:hover {
+  cursor: default;
+  color: var(--ink-dim);
 }
 
 /* design.md: no opacity fades, so a disabled button is drawn in --ink-dim. */
@@ -164,6 +201,11 @@ input {
   width: 100%;
   height: calc(100vh - 260px);
   margin-top: 16px;
+}
+
+/* Tab 3 has a row of buttons above the stage, and a chain's result line often takes two lines. */
+.six-degrees .stage canvas {
+  height: calc(100vh - 340px);
 }
 
 .stage-controls {

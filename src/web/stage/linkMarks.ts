@@ -1,6 +1,6 @@
 /**
  * The marks every search animation shares (design.md § Animations): a tried Link's timing, a rejected
- * cell fading into the halftone, the answer's gold flash, and sparkles. Used by tab 1 and tab 2.
+ * cell fading into the halftone, a Link growing, the answer's gold flash, and sparkles. Used by every tab.
  */
 import { dissolved } from "./dissolve";
 import { type Cell, CELL_ASPECT, type Grid, type Ink, lineCells, setCell } from "./charGrid";
@@ -19,6 +19,9 @@ const SPARKS = 12;
 const SPARK_REACH = 7;
 const SPARK_GLYPHS = ["*", "+", ".", "'"];
 
+/** `value` kept within min to max. */
+export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
 /** How far a rejected mark tried at `start` has faded at `t` (0 to 1): never, when `fades` is false (not possible ends fully red). */
 export function fadeOf(t: number, start: number, fades: boolean): number {
   return fades ? Math.max(0, (t - start - TRYING - HOLD) / FADE) : 0;
@@ -34,6 +37,12 @@ export function fadedCell(grid: Grid, x: number, y: number, char: string, fade: 
 export function drawRejectedLink(grid: Grid, p: Cell, q: Cell, fade: number): void {
   if (fade >= 1) return;
   for (const { x, y, char } of lineCells(p.x, p.y, q.x, q.y, true)) fadedCell(grid, x, y, char, fade);
+}
+
+/** The first `progress` (0 to 1) of the solid line p–q, from p. */
+export function growLine(grid: Grid, p: Cell, q: Cell, progress: number, ink: Ink): void {
+  const cells = lineCells(p.x, p.y, q.x, q.y, false);
+  for (const { x, y, char } of cells.slice(0, Math.ceil(progress * cells.length))) setCell(grid, x, y, char, ink);
 }
 
 /** The answer's ink at `t`: green, flashing gold for FLASH after `settled`. */

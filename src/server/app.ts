@@ -100,6 +100,27 @@ export function buildApp(operations: Operations, webDir?: string) {
     async ({ query }) => operations.chainToCenter(query.center, query.actor, query.mode),
   );
 
+  app.get<{ Querystring: { center?: string; layer: number; position: number } }>(
+    "/api/six-degrees/layer-actor",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          required: ["layer", "position"],
+          properties: {
+            center: centerSchema,
+            layer: { type: "integer", minimum: 0 },
+            position: { type: "integer", minimum: 0 },
+          },
+        },
+      },
+    },
+    async ({ query }, reply) => {
+      const actor = operations.layerActor(query.center, query.layer, query.position);
+      return actor ?? reply.code(404).send({ error: `No Actor at layer ${query.layer}, position ${query.position}` });
+    },
+  );
+
   app.get<{ Querystring: { center?: string; q: string; offset: number; limit: number } }>(
     "/api/six-degrees/unlinked",
     {

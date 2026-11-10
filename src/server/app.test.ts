@@ -108,6 +108,20 @@ describe("GET /api/six-degrees/chain", () => {
   });
 });
 
+describe("GET /api/six-degrees/layer-actor", () => {
+  it("returns the Actor at a position in a Layer", async () => {
+    const response = await app.inject({ url: "/api/six-degrees/layer-actor?center=nm01&layer=2&position=3" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ id: "nm14", name: "Xia Ortiz", birthYear: 1993 });
+  });
+
+  it("answers 404 outside the Layers and 400 for a bad or missing place", async () => {
+    expect((await app.inject({ url: "/api/six-degrees/layer-actor?layer=2&position=4" })).statusCode).toBe(404);
+    expect((await app.inject({ url: "/api/six-degrees/layer-actor?layer=-1&position=0" })).statusCode).toBe(400);
+    expect((await app.inject({ url: "/api/six-degrees/layer-actor?layer=1" })).statusCode).toBe(400);
+  });
+});
+
 describe("GET /api/six-degrees/unlinked", () => {
   it("returns one page of the can't-be-linked list, searchable by name", async () => {
     const page = await app.inject({ url: "/api/six-degrees/unlinked?center=nm01&offset=1&limit=1" });

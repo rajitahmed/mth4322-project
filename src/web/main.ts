@@ -1,4 +1,4 @@
-import { findChainToCenter, findCycle, findLargestPath, findLayers, findPath, searchActors } from "./api";
+import { findActorAt, findChainToCenter, findCycle, findLargestPath, findLayers, findPath, findUnlinked, searchActors } from "./api";
 import { createCyclePanel } from "./cyclePanel";
 import { showEnterScreen } from "./enter/enterScreen";
 import { createPathPanel } from "./pathPanel";
@@ -16,7 +16,14 @@ void showEnterScreen(document.body, reducedMotion).then(() =>
     createTabs([
       { name: "largest path", panel: createPathPanel(searchActors, findPath, findLargestPath, createStage(reducedMotion)) },
       { name: "shortest cycle", panel: createCyclePanel(searchActors, findCycle, createStage(reducedMotion)) },
-      { name: "six degrees of bacon", panel: createSixDegreesPanel(searchActors, findLayers, findChainToCenter) },
+      {
+        name: "six degrees of bacon",
+        panel: createSixDegreesPanel(
+          searchActors,
+          { findLayers, findChain: findChainToCenter, findActorAt, findUnlinked },
+          createStage(reducedMotion),
+        ),
+      },
     ]),
   ),
 );

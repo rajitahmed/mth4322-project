@@ -48,10 +48,11 @@ export type ChainMode = (typeof CHAIN_MODES)[number];
 /**
  * The chain from the Center to a picked Actor, with the sum and average of its
  * Movies' ratings (no average for the Center itself), or none when the Actor
- * can't be linked.
+ * can't be linked. `positions[i]` is `actors[i]`'s position in Layer i (Layers are
+ * in id order), D25.
  */
 export type ChainToCenter =
-  | (Chain & { found: true; totalRating: number; averageRating: number | null })
+  | (Chain & { found: true; totalRating: number; averageRating: number | null; positions: number[] })
   | { found: false };
 
 /** What tab 3 shows first: Actors per Layer (Layer 0 is the Center) and how many can't be linked. */

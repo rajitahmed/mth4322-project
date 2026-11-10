@@ -720,3 +720,54 @@ A chronological log of how this application is being built. There is one entry p
   - Kept and flagged: the drawn-in red Links for "different Groups" and "cut actor".
 - **Verified:** `npm run typecheck` is clean. `npm test` runs 211 tests and all pass. `npm run build` is OK.
 - **Committed** to `main`.
+
+## 2026-11-10: Ticket #12 implemented (tab 3 circles-inside-circles animation)
+
+- **Asked:** `/implement` ticket #12. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Explored:**
+  - Ticket #12 (`gh issue view 12 --json …`; plain `gh issue view` fails on a GitHub deprecation).
+  - Tab 3's plain view (`sixDegreesPanel.ts`), the Six Degrees server code (`sixDegrees.ts`, `operations.ts`, `app.ts`), and the engine and scenes from tickets #10 and #11 (`stage/`, `cycle/`).
+  - DECISIONS D10–D12, D18, D19, D23, D24, and design.md § Animations, § Rendering, § Colors and § Layout.
+- **Decided (recorded as D25):**
+  - Tab 3 gets its own stage and plays a new `ringsScene`.
+  - Rings are evenly spaced and round. A ring has one dot per Actor while they fit; otherwise each dot stands for a run of Actors in id order, weighted `·` / `•` / `●` by how many.
+  - The Actor behind a dot is looked up on click through a new endpoint, `/api/six-degrees/layer-actor`. The chain response now carries each chain Actor's position in its Layer. This replaces D12's plan of sending ring samples.
+  - Counts go in a legend column beside the rings.
+  - The rings grow inside out over 5–13 s. A picked chain grows from the Actor back to the Center in green, then the gold flash and sparkles.
+  - `[can't be linked: n]` opens a paged, searchable list in place of the stage.
+  - The stage holds a scene played while it is hidden and refits on its canvas's own size.
+- **Built (test first):**
+  - Server: `positionIn`, `positions` on `ChainToCenter`, `layerActor`, and the `layer-actor` route.
+  - Client:
+    - `rings/ringsLayout.ts` and `rings/ringsScene.ts`;
+    - `unlinkedList.ts`;
+    - `findActorAt` and `findUnlinked` in `api.ts`.
+  - Stage: `onCellClick`, `cellAtPoint`, wait-until-shown, and `fakeStage` clicks.
+  - `growLine` moved to `linkMarks.ts`.
+  - The panel takes a `SixDegreesApi` object and a `Stage`.
+- **Checked:**
+  - Final frames were printed as text.
+  - In Chrome on the real data (`DATA_DIR=data/imdb`):
+    - the rings start when tab 3 is first shown;
+    - `[skip]` works;
+    - picking a Layer 5 dot drew Ju Wang's chain;
+    - `[best-rated link]` redrew Karel Uhlík's chain;
+    - the list pages and searches.
+  - That check found the page scrolling when a long chain wrapped the result line, so tab 3's stage was made shorter.
+  - The server and the browser tab were closed afterwards.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - Fixed:
+    - a blank stage after a resize while hidden (the stage now refits on its canvas's own size);
+    - `clamp` duplicated in two scenes;
+    - "rings" wording in server and shared comments;
+    - unclear names;
+    - list state read back from the DOM;
+    - a duplicate import.
+  - Left as is, with reasons in D25: small parameter pairs, `toLocaleString` call sites, the tuned stage height.
+  - Kept and flagged to the user:
+    - dot weight comes from the Actor count, not from the Layer, so outer Layers are lighter on the real data but not on the tiny one;
+    - the legend column instead of a count on each ring;
+    - a heavy dot picks its first Actor;
+    - a click during the growth may pick a not-yet-drawn dot.
+- **Verified:** `npm run typecheck` is clean. `npm test` (all tests pass) and `npm run build` are OK.
+- **Committed** to `main`.

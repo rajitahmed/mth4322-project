@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createGrid } from "./charGrid";
-import { createStage, type Scene } from "./stage";
+import { cellAtPoint, createStage, type Scene } from "./stage";
 
 /** A 2-second scene that records the times it was asked to draw. */
 function recordingScene(): Scene & { times: number[] } {
@@ -90,5 +90,31 @@ describe("stage", () => {
     const { button } = setup();
     expect(button("[skip]").hidden).toBe(true);
     expect(button("[replay]").hidden).toBe(true);
+  });
+
+  it("holds a scene played while the stage is hidden, and starts it when the stage is shown", async () => {
+    const { stage, playing, onPlaying, button } = setup();
+    const panel = document.createElement("div");
+    panel.hidden = true;
+    panel.append(stage.element);
+    document.body.append(panel);
+    stage.play(recordingScene(), onPlaying);
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(playing).toEqual([]);
+    expect(button("[replay]").hidden).toBe(true);
+    panel.hidden = false;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(playing).toEqual([true]);
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(playing).toEqual([true, false]);
+  });
+});
+
+describe("cellAtPoint", () => {
+  it("finds the character cell under a point on the canvas", () => {
+    const cell = { width: 9.6, height: 19 };
+    expect(cellAtPoint(0, 0, cell)).toEqual({ x: 0, y: 0 });
+    expect(cellAtPoint(9.5, 18.9, cell)).toEqual({ x: 0, y: 0 });
+    expect(cellAtPoint(96.1, 38, cell)).toEqual({ x: 10, y: 2 });
   });
 });

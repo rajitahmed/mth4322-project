@@ -21,7 +21,7 @@ import { type Graph, moviesOf } from "./graph";
 import { largestPath } from "./largestPath";
 import { recentCache } from "./recentCache";
 import { shortestPath } from "./shortestPath";
-import { type CenterLayers, chainRatings, layersAround } from "./sixDegrees";
+import { type CenterLayers, chainRatings, layersAround, positionIn } from "./sixDegrees";
 
 export const DEFAULT_SEARCH_LIMIT = 10;
 export const MAX_SEARCH_LIMIT = 50;
@@ -147,14 +147,22 @@ export function createOperations(graph: Graph) {
     /**
      * The chain from the Center to one Actor, with its total and average rating:
      * the shortest-link chain (BFS parents) or the best-rated one (D11). Its
-     * Distance is the Actor's Layer in both modes.
+     * Distance is the Actor's Layer in both modes. `positions[i]` is chain Actor i's
+     * position in Layer i (D25).
      */
     chainToCenter(centerId: string | undefined, actorId: string, mode: ChainMode = "shortest"): ChainToCenter {
-      const { search, bestRatedParents } = centerOf(centerId).around;
+      const { search, bestRatedParents, layers } = centerOf(centerId).around;
       const actor = indexOf(actorId);
       if (search.distance[actor] === -1) return { found: false };
       const chain = chainTo(mode === "shortest" ? search : bestRatedParents, actor);
-      return { found: true, ...chainOf(chain), ...chainRatings(graph, chain) };
+      const positions = chain.actors.map((a, i) => positionIn(layers[i]!, a));
+      return { found: true, ...chainOf(chain), ...chainRatings(graph, chain), positions };
+    },
+
+    /** The Actor at `position` in Layer `layer` around the Center (Layers are in id order), or null outside the Layers (D25). */
+    layerActor(centerId: string | undefined, layer: number, position: number): ActorSummary | null {
+      const actor = centerOf(centerId).around.layers[layer]?.[position];
+      return actor === undefined ? null : actorAt(actor);
     },
 
     /**

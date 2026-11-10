@@ -237,6 +237,20 @@ describe("six degrees", () => {
     expect(chain.found && chain.movies.map((m) => m.title)).toEqual(["Low Tide", "Low Tide 2"]);
   });
 
+  it("gives each chain Actor's position in its Layer, so the rings can place the chain (Xia Ortiz: Kevin 0, Sid 1, Xia 3)", () => {
+    expect(operations.chainToCenter("nm01", "nm14")).toMatchObject({ positions: [0, 1, 3] });
+    expect(operations.chainToCenter("nm01", "nm14", "best-rated")).toMatchObject({ positions: [0, 2, 3] });
+    expect(operations.chainToCenter("nm01", "nm01")).toMatchObject({ positions: [0] });
+  });
+
+  it("finds the Actor at a position in a Layer, and none outside the Layers", () => {
+    expect(operations.layerActor("nm01", 2, 3)).toEqual({ id: "nm14", name: "Xia Ortiz", birthYear: 1993 });
+    expect(operations.layerActor(undefined, 0, 0)?.id).toBe("nm01");
+    expect(operations.layerActor("nm16", 1, 1)?.id).toBe("nm17");
+    expect(operations.layerActor("nm01", 2, 4)).toBeNull();
+    expect(operations.layerActor("nm01", 6, 0)).toBeNull();
+  });
+
   it("finds no chain for an Actor who can't be linked", () => {
     expect(operations.chainToCenter("nm01", "nm17")).toEqual({ found: false });
   });

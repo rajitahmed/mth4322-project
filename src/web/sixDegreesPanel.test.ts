@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
-import type { ActorSummary, ChainMode, ChainToCenter, LayerSummary } from "../shared/types";
+import type { ActorSummary, ChainMode, ChainToCenter, LayerSummary, UnlinkedPage } from "../shared/types";
+import { layoutRings } from "./rings/ringsLayout";
 import { createSixDegreesPanel } from "./sixDegreesPanel";
+import { endInks, FAKE_COLUMNS, FAKE_ROWS, fakeStage } from "./stage/fakeStage";
 
 const kevin: ActorSummary = { id: "nm01", name: "Kevin Bacon", birthYear: 1958 };
 const sid: ActorSummary = { id: "nm12", name: "Sid Moss", birthYear: 1975 };
@@ -23,6 +25,7 @@ const toXia: ChainToCenter = {
   ],
   totalRating: 12.5,
   averageRating: 6.25,
+  positions: [0, 1, 3],
 };
 const bestToXia: ChainToCenter = {
   found: true,
@@ -34,6 +37,7 @@ const bestToXia: ChainToCenter = {
   ],
   totalRating: 17.3,
   averageRating: 8.65,
+  positions: [0, 2, 3],
 };
 
 function setup(chain: ChainToCenter | Error = toXia) {
@@ -43,7 +47,10 @@ function setup(chain: ChainToCenter | Error = toXia) {
     if (chain instanceof Error) throw chain;
     return mode === "best-rated" && chain === toXia ? bestToXia : chain;
   });
-  const panel = createSixDegreesPanel(search, findLayers, findChain);
+  const findActorAt = vi.fn(async (_center: string, layer: number, position: number) => (layer === 2 && position === 3 ? xia : kevin));
+  const findUnlinked = vi.fn(async (): Promise<UnlinkedPage> => ({ total: 3, actors: [gia] }));
+  const { stage, scenes, finish, click } = fakeStage();
+  const panel = createSixDegreesPanel(search, { findLayers, findChain, findActorAt, findUnlinked }, stage);
   document.body.replaceChildren(panel);
   const inputs = [...panel.querySelectorAll("input")];
   const pick = async (field: number, text: string) => {
@@ -54,9 +61,9 @@ function setup(chain: ChainToCenter | Error = toXia) {
   };
   const button = (text: string) => [...panel.querySelectorAll("button")].find((b) => b.textContent === text)!;
   const layers = () => panel.querySelector(".layers")!.textContent;
-  const result = () => panel.querySelector(".result")!;
+  const result = () => panel.querySelector<HTMLElement>(".result")!;
   const loaded = (text: string) => vi.waitFor(() => expect(layers()).toContain(text));
-  return { inputs, pick, button, layers, result, loaded, findLayers, findChain };
+  return { panel, stage, inputs, pick, button, layers, result, loaded, findLayers, findChain, findActorAt, findUnlinked, scenes, finish, click };
 }
 
 describe("six degrees panel", () => {
@@ -115,7 +122,7 @@ describe("six degrees panel", () => {
   });
 
   it("writes the Center's own chain without ratings", async () => {
-    const { pick, button, result, loaded } = setup({ found: true, distance: 0, actors: [kevin], movies: [], totalRating: 0, averageRating: null });
+    const { pick, button, result, loaded } = setup({ found: true, distance: 0, actors: [kevin], movies: [], totalRating: 0, averageRating: null, positions: [0] });
     await loaded("layer 5");
     await pick(1, "kev");
     button("[enter]").click();
@@ -194,5 +201,97 @@ describe("six degrees panel", () => {
     button("[enter]").click();
     expect(findChain).not.toHaveBeenCalled();
     expect(result().textContent).toBe("");
+  });
+
+  it("plays the rings for the Center once its Layers are loaded, and again for a new Center", async () => {
+    const { pick, button, loaded, scenes } = setup();
+    await loaded("layer 5");
+    expect(scenes).toHaveLength(1);
+    expect(scenes[0]!.duration).toBeGreaterThanOrEqual(5);
+    expect(endInks(scenes[0]!).has("green")).toBe(false);
+    await pick(0, "gus");
+    button("[enter]").click();
+    await loaded("can't be linked: 14");
+    expect(scenes).toHaveLength(2);
+  });
+
+  it("draws a found chain in green on the rings, hiding the result line while it plays", async () => {
+    const { pick, button, result, loaded, scenes, finish } = setup();
+    await loaded("layer 5");
+    await pick(1, "xia");
+    button("[enter]").click();
+    await vi.waitFor(() => expect(scenes).toHaveLength(2));
+    expect(endInks(scenes[1]!).has("green")).toBe(true);
+    expect(result().hidden).toBe(true);
+    finish();
+    expect(result().hidden).toBe(false);
+    expect(result().textContent).toContain("Low Tide");
+  });
+
+  it("redraws the chain when the mode changes", async () => {
+    const { pick, button, result, loaded, scenes } = setup();
+    await loaded("layer 5");
+    await pick(1, "xia");
+    button("[enter]").click();
+    await vi.waitFor(() => expect(scenes).toHaveLength(2));
+    button("[best-rated link]").click();
+    await vi.waitFor(() => expect(scenes).toHaveLength(3));
+    await vi.waitFor(() => expect(result().textContent).toContain("High Noon"));
+    expect(scenes[2]).not.toEqual(scenes[1]);
+  });
+
+  it("draws nothing new for an Actor who can't be linked", async () => {
+    const { pick, button, result, loaded, scenes } = setup({ found: false });
+    await loaded("layer 5");
+    await pick(1, "gia");
+    button("[enter]").click();
+    await vi.waitFor(() => expect(result().textContent).toContain("can't be linked"));
+    expect(scenes).toHaveLength(1);
+    expect(result().hidden).toBe(false);
+  });
+
+  it("picking a dot asks who it stands for, puts them in the actor field, and draws their chain", async () => {
+    const { inputs, result, loaded, scenes, click, findActorAt, findChain } = setup();
+    await loaded("layer 5");
+    const dot = layoutRings(aroundKevin.layerCounts, FAKE_COLUMNS, FAKE_ROWS).rings[2]!.dots[3]!;
+    click({ x: dot.x, y: dot.y });
+    await vi.waitFor(() => expect(scenes).toHaveLength(2));
+    expect(findActorAt).toHaveBeenCalledWith("nm01", 2, 3);
+    expect(findChain).toHaveBeenCalledWith("nm01", "nm14", "shortest");
+    expect(inputs[1]!.value).toBe("Xia Ortiz (1990)");
+    expect(result().textContent).toContain("layer 2: Kevin Bacon");
+  });
+
+  it("does nothing for a click far from every dot", async () => {
+    const { loaded, click, findActorAt } = setup();
+    await loaded("layer 5");
+    click({ x: 0, y: 0 });
+    expect(findActorAt).not.toHaveBeenCalled();
+  });
+
+  it("shows the can't-be-linked count as a button that opens and closes the list in place of the stage", async () => {
+    const { panel, stage, button, loaded, findUnlinked } = setup();
+    await loaded("layer 5");
+    const open = button("[can't be linked: 3]");
+    expect(open.getAttribute("aria-expanded")).toBe("false");
+    open.click();
+    expect(open.getAttribute("aria-expanded")).toBe("true");
+    expect(stage.element.hidden).toBe(true);
+    await vi.waitFor(() => expect(panel.querySelector(".unlinked")!.textContent).toContain("Gia Quinn (1982)"));
+    expect(findUnlinked).toHaveBeenCalledWith("nm01", "", 0, 10);
+    open.click();
+    expect(stage.element.hidden).toBe(false);
+    expect((panel.querySelector(".unlinked") as HTMLElement).hidden).toBe(true);
+  });
+
+  it("closes the list and shows the new count when the Center changes", async () => {
+    const { pick, button, loaded, stage } = setup();
+    await loaded("layer 5");
+    button("[can't be linked: 3]").click();
+    await pick(0, "gus");
+    button("[enter]").click();
+    await loaded("can't be linked: 14");
+    expect(button("[can't be linked: 14]").getAttribute("aria-expanded")).toBe("false");
+    expect(stage.element.hidden).toBe(false);
   });
 });

@@ -23,6 +23,18 @@ export function layersAround(graph: Graph, center: number): CenterLayers {
   return { search, layers, unlinked: Int32Array.from(unlinked), bestRatedParents: bestRatedChoices(graph, layers) };
 }
 
+/** An Actor's place in a Layer (Layers are sorted by index), found by binary search; -1 when not there. */
+export function positionIn(layer: Int32Array, actor: number): number {
+  let [low, high] = [0, layer.length - 1];
+  while (low <= high) {
+    const middle = (low + high) >>> 1;
+    if (layer[middle] === actor) return middle;
+    if (layer[middle]! < actor) low = middle + 1;
+    else high = middle - 1;
+  }
+  return -1;
+}
+
 /** A Movie's rating in tenths, so sums of ratings add and compare exactly. */
 function ratingTenths(movie: Movie): number {
   return Math.round(movie.rating * 10);

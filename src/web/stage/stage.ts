@@ -4,8 +4,8 @@
  * knows nothing about what the Scene shows.
  */
 import { button } from "../button";
-import type { Grid } from "./charGrid";
-import { type CanvasView, canvasFont, measureCanvas, paintGrid } from "./paintGrid";
+import type { Cell, Grid } from "./charGrid";
+import { type CanvasView, canvasFont, type CellSize, measureCanvas, paintGrid } from "./paintGrid";
 
 /** An animation: what the stage shows `t` seconds in (0 to `duration`), on a grid of `columns` × `rows` cells. */
 export interface Scene {
@@ -15,8 +15,33 @@ export interface Scene {
 
 export interface Stage {
   element: HTMLElement;
-  /** Plays `scene` from the start, replacing any scene playing. `onPlaying` hears true when a run starts and false when it ends. */
+  /**
+   * Plays `scene` from the start, replacing any scene playing. `onPlaying` hears true when a run starts and false when it ends.
+   * A scene played while the stage is hidden (its tab not shown) starts when the stage is shown.
+   */
   play(scene: Scene, onPlaying: (playing: boolean) => void): void;
+  /** Calls `listener` with the cell clicked, and the grid's size then. */
+  onCellClick(listener: (cell: Cell, columns: number, rows: number) => void): void;
+}
+
+/** The character cell under the point (`px`, `py`) in CSS px from the canvas's top left. */
+export function cellAtPoint(px: number, py: number, cell: CellSize): Cell {
+  return { x: Math.floor(px / cell.width), y: Math.floor(py / cell.height) };
+}
+
+/** Calls `callback` now if `element` is shown, else once no element around it is hidden; returns a way to stop waiting. */
+function whenShown(element: HTMLElement, callback: () => void): () => void {
+  if (!element.closest("[hidden]")) {
+    callback();
+    return () => {};
+  }
+  const observer = new MutationObserver(() => {
+    if (element.closest("[hidden]")) return;
+    observer.disconnect();
+    callback();
+  });
+  observer.observe(document.body, { attributes: true, attributeFilter: ["hidden"], subtree: true });
+  return () => observer.disconnect();
 }
 
 /** A stage; with `reducedMotion` every run skips straight to the scene's last frame. */
@@ -86,15 +111,25 @@ export function createStage(reducedMotion: boolean): Stage {
     measure();
     if (scene && !playing) draw(scene.duration);
   };
-  window.addEventListener("resize", refit);
+  // The canvas's own size, not the window's: it changes when the stage is shown again after being hidden.
+  if (typeof ResizeObserver !== "undefined") new ResizeObserver(refit).observe(canvas);
+  else window.addEventListener("resize", refit);
   void document.fonts?.load(canvasFont()).then(refit);
 
+  let stopWaiting = () => {};
   return {
     element,
     play(next, listener) {
+      stopWaiting();
+      cancelAnimationFrame(frame);
       scene = next;
       onPlaying = listener;
-      run();
+      stopWaiting = whenShown(element, run);
+    },
+    onCellClick(listener) {
+      canvas.addEventListener("click", (event) => {
+        if (view) listener(cellAtPoint(event.offsetX, event.offsetY, view.cell), view.columns, view.rows);
+      });
     },
   };
 }
