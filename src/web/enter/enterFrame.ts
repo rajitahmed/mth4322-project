@@ -1,7 +1,8 @@
 /** One frame of the enter screen as a character grid: halftone field, turning icosahedron, MOVIE STATISTICS. */
 import { bigText } from "./bigText";
-import { createGrid, drawLine, type Grid, setCell, writeText } from "./charGrid";
-import { halftoneGlyph } from "./halftone";
+import { createGrid, drawLine, type Grid, writeText } from "../stage/charGrid";
+import { dissolved } from "../stage/dissolve";
+import { overHalftone } from "../stage/halftone";
 import { type Point, viewEdges } from "./icosahedron";
 
 /** The icosahedron is redrawn 30 times a second; the field and the dissolve move every frame. */
@@ -11,7 +12,6 @@ const SPIN = 0.45;
 /** Share of the smaller screen side the icosahedron fills. */
 const SIZE = 0.92;
 const TITLE = bigText(["MOVIE", "STATISTICS"]);
-const DOTS = ["●", "•", "·"];
 
 export interface StageLayout {
   cx: number;
@@ -47,21 +47,6 @@ function drawTitle(grid: Grid, aspect: number, hover: boolean): void {
   TITLE.forEach((row, i) => writeText(grid, left, top + i, row, hover ? "accent" : "ink"));
 }
 
-/** A fixed pseudo-random number in [0, 1) per cell, so each cell dissolves at its own moment. */
-function cellNoise(i: number): number {
-  return ((Math.imul(i + 1, 2654435761) >>> 0) % 1000) / 1000;
-}
-
-/**
- * The glyph a cell shows `progress` (0 to 1) into the dissolve: itself, then `●` `•` `·`, then nothing.
- * Each cell starts somewhere in the first 70% and takes 30% to fade, so all are gone at 1.
- */
-function dissolved(char: string, i: number, progress: number): string {
-  const step = (progress - 0.7 * cellNoise(i)) / 0.3;
-  if (step <= 0) return char;
-  return step >= 1 ? "" : DOTS[Math.floor(step * DOTS.length)]!;
-}
-
 /**
  * The frame at time `t` seconds. `dissolve` runs from 0 (whole) to 1 (only the halftone field is left).
  */
@@ -70,14 +55,8 @@ export function composeFrame(width: number, height: number, aspect: number, t: n
   drawIcosahedron(front, aspect, t);
   drawTitle(front, aspect, hover);
 
-  const grid = createGrid(width, height);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const i = y * width + x;
-      const char = front.chars[i] === "" ? "" : dissolved(front.chars[i]!, i, dissolve);
-      if (char === "") setCell(grid, x, y, halftoneGlyph(x, y, t), "ink-dim");
-      else setCell(grid, x, y, char, front.inks[i]!);
-    }
+  for (let i = 0; i < front.chars.length; i++) {
+    if (front.chars[i] !== "") front.chars[i] = dissolved(front.chars[i]!, i, dissolve);
   }
-  return grid;
+  return overHalftone(front, t);
 }

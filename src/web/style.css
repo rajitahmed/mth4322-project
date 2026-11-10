@@ -157,3 +157,26 @@ input {
   width: 100%;
   height: 100%;
 }
+
+/* The stage takes the rest of the screen, so nothing scrolls while an animation plays (design.md § Layout). */
+.stage canvas {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 260px);
+  margin-top: 16px;
+}
+
+.stage-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 24px;
+  min-height: 1.4em;
+}
+
+.stage-controls button {
+  cursor: pointer;
+}
+
+.stage-controls button:hover {
+  color: var(--accent);
+}

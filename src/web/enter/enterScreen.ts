@@ -1,33 +1,9 @@
 /** The enter screen: a turning ASCII icosahedron with MOVIE STATISTICS inside, over a halftone field. */
-import type { Grid } from "./charGrid";
+import type { Grid } from "../stage/charGrid";
 import { composeFrame, isOnIcosahedron } from "./enterFrame";
-import { type CellSize, paintGrid } from "./paintGrid";
+import { type CanvasView, canvasFont, measureCanvas, paintGrid } from "../stage/paintGrid";
 
 const DISSOLVE_MS = 800;
-/** Canvas text size in px (design.md: nothing under 14px). */
-const FONT_PX = 16;
-/** Row height as a multiple of the font size. */
-const LINE_HEIGHT = 1.2;
-
-interface View {
-  ctx: CanvasRenderingContext2D;
-  cell: CellSize;
-  columns: number;
-  rows: number;
-}
-
-/** Sizes the canvas to the window and measures one character cell; null when there is no 2D canvas. */
-function measure(canvas: HTMLCanvasElement): View | null {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  const scale = window.devicePixelRatio || 1;
-  canvas.width = Math.floor(window.innerWidth * scale);
-  canvas.height = Math.floor(window.innerHeight * scale);
-  ctx.scale(scale, scale);
-  ctx.font = `${FONT_PX}px ${getComputedStyle(document.body).fontFamily}`;
-  const cell = { width: ctx.measureText("M").width, height: Math.round(FONT_PX * LINE_HEIGHT) };
-  return { ctx, cell, columns: Math.ceil(window.innerWidth / cell.width), rows: Math.ceil(window.innerHeight / cell.height) };
-}
 
 /**
  * Shows the enter screen in `parent` until the user clicks the icosahedron or presses Enter; it then
@@ -48,7 +24,8 @@ export function showEnterScreen(parent: HTMLElement, reducedMotion: boolean): Pr
     parent.append(screen);
     button.focus();
 
-    let view = measure(canvas);
+    const measure = () => measureCanvas(canvas, window.innerWidth, window.innerHeight);
+    let view: CanvasView | null = measure();
     let shown: Grid | null = null;
     let hover = false;
     let entering = false;
@@ -61,7 +38,7 @@ export function showEnterScreen(parent: HTMLElement, reducedMotion: boolean): Pr
       isOnIcosahedron(view.columns, view.rows, aspect(), event.offsetX / view.cell.width, event.offsetY / view.cell.height);
 
     const resize = () => {
-      view = measure(canvas);
+      view = measure();
       shown = null; // repaint every cell
     };
     const enter = () => {
@@ -104,7 +81,7 @@ export function showEnterScreen(parent: HTMLElement, reducedMotion: boolean): Pr
     button.addEventListener("click", onClick);
     canvas.addEventListener("mousemove", onMove);
     // Nothing else on the page uses the font yet, so ask for it by name before measuring cells again.
-    void document.fonts?.load(`${FONT_PX}px ${getComputedStyle(document.body).fontFamily}`).then(resize);
+    void document.fonts?.load(canvasFont()).then(resize);
     frame = requestAnimationFrame(tick);
   });
 }

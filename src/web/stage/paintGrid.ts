@@ -6,6 +6,35 @@ export interface CellSize {
   height: number;
 }
 
+/** A canvas ready to paint, and how many character cells fit on it. */
+export interface CanvasView {
+  ctx: CanvasRenderingContext2D;
+  cell: CellSize;
+  columns: number;
+  rows: number;
+}
+
+/** Canvas text size in px (design.md: nothing under 14px). */
+const FONT_PX = 16;
+/** Row height as a multiple of the font size. */
+const LINE_HEIGHT = 1.2;
+
+/** The canvas font: the page's one monospace typeface. */
+export const canvasFont = () => `${FONT_PX}px ${getComputedStyle(document.body).fontFamily}`;
+
+/** Sizes the canvas to `width` × `height` CSS px and measures one character cell; null when there is no 2D canvas. */
+export function measureCanvas(canvas: HTMLCanvasElement, width: number, height: number): CanvasView | null {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(width * scale);
+  canvas.height = Math.floor(height * scale);
+  ctx.scale(scale, scale);
+  ctx.font = canvasFont();
+  const cell = { width: ctx.measureText("M").width, height: Math.round(FONT_PX * LINE_HEIGHT) };
+  return { ctx, cell, columns: Math.ceil(width / cell.width), rows: Math.ceil(height / cell.height) };
+}
+
 /** Colors come from the design.md tokens on :root, read once per paint. */
 function tokens(): (name: string) => string {
   const style = getComputedStyle(document.documentElement);

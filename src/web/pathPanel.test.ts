@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
-import type { ActorSummary, FoundPath, ShortestPath } from "../shared/types";
+import type { ActorSummary, ExploredLink, FoundPath, ShortestPath } from "../shared/types";
 import { createPathPanel } from "./pathPanel";
+import type { Scene, Stage } from "./stage/stage";
 
 const kevin: ActorSummary = { id: "nm01", name: "Kevin Bacon", birthYear: 1958 };
 const ben: ActorSummary = { id: "nm03", name: "Ben Cole", birthYear: 1965 };
@@ -16,8 +17,38 @@ const twoLinks: ShortestPath = {
     { id: "tt01", title: "Open Road" },
     { id: "tt02", title: "Ring One" },
   ],
-  explored: [],
+  explored: [
+    { from: "nm01", movie: "tt01", to: "nm02", side: "a" },
+    { from: "nm01", movie: "tt09", to: "nm09", side: "a" },
+    { from: "nm03", movie: "tt02", to: "nm02", side: "b" },
+  ],
 };
+
+const noPath: ShortestPath = {
+  found: false,
+  explored: [
+    { from: "nm01", movie: "tt01", to: "nm02", side: "a" },
+    { from: "nm17", movie: "tt07", to: "nm18", side: "b" },
+  ] satisfies ExploredLink[],
+};
+
+/** A stage that plays nothing: each scene stays "playing" until the test calls `finish`. */
+function fakeStage() {
+  const scenes: Scene[] = [];
+  let onPlaying: (playing: boolean) => void = () => {};
+  const stage: Stage = {
+    element: document.createElement("section"),
+    play(scene, listener) {
+      scenes.push(scene);
+      onPlaying = listener;
+      listener(true);
+    },
+  };
+  return { stage, scenes, finish: () => onPlaying(false) };
+}
+
+/** The colors on a scene's last frame. */
+const endInks = (scene: Scene) => new Set(scene.frame(scene.duration, 80, 25).inks);
 
 const sevenLinks: FoundPath = {
   found: true,
@@ -42,7 +73,8 @@ function setup(path: ShortestPath | Error, largest: FoundPath | Error = sevenLin
     if (largest instanceof Error) throw largest;
     return largest;
   });
-  const panel = createPathPanel(search, findPath, findLargestPath);
+  const { stage, scenes, finish } = fakeStage();
+  const panel = createPathPanel(search, findPath, findLargestPath, stage);
   document.body.replaceChildren(panel);
   const inputs = [...panel.querySelectorAll("input")];
   const pick = async (field: number, text: string) => {
@@ -52,13 +84,15 @@ function setup(path: ShortestPath | Error, largest: FoundPath | Error = sevenLin
     panel.querySelector('[role="option"]')!.dispatchEvent(new MouseEvent("mousedown"));
   };
   const button = (text: string) => [...panel.querySelectorAll("button")].find((b) => b.textContent === text)!;
+  /** Presses a button and lets the animation finish. */
   const press = async (text: string) => {
     button(text).click();
     await vi.waitFor(() => expect(result().textContent).not.toBe(""));
+    finish();
   };
   const enter = () => press("[enter]");
-  const result = () => panel.querySelector(".result")!;
-  return { pick, enter, press, button, result, findPath, findLargestPath };
+  const result = () => panel.querySelector<HTMLElement>(".result")!;
+  return { pick, enter, press, button, result, findPath, findLargestPath, scenes, finish };
 }
 
 describe("largest path panel", () => {
@@ -73,7 +107,7 @@ describe("largest path panel", () => {
   });
 
   it("shows a fully red 'no path' when the Actors are in different Groups", async () => {
-    const { pick, enter, result } = setup({ found: false, explored: [] });
+    const { pick, enter, result } = setup(noPath);
     await pick(0, "kevin");
     await pick(1, "gia");
     await enter();
@@ -113,5 +147,43 @@ describe("largest path panel", () => {
     const { press, result } = setup(twoLinks, new Error("Largest path failed: 500"));
     await press("[largest path]");
     expect(result().textContent).toBe("search failed, try again");
+  });
+
+  it("plays the search as live linking, and shows the result line only once the animation ends", async () => {
+    const { pick, button, result, scenes, finish } = setup(twoLinks);
+    await pick(0, "kevin");
+    await pick(1, "ben");
+    button("[enter]").click();
+    await vi.waitFor(() => expect(scenes).toHaveLength(1));
+    expect(result().hidden).toBe(true);
+    finish();
+    expect(result().hidden).toBe(false);
+    expect(endInks(scenes[0]!).has("green")).toBe(true);
+  });
+
+  it("plays a 'no path' fully red", async () => {
+    const { pick, enter, scenes } = setup(noPath);
+    await pick(0, "kevin");
+    await pick(1, "gia");
+    await enter();
+    const inks = endInks(scenes[0]!);
+    expect(inks.has("red")).toBe(true);
+    expect(inks.has("green")).toBe(false);
+  });
+
+  it("plays the largest path the same way, from its bidirectional search", async () => {
+    const { press, scenes } = setup(twoLinks, { ...sevenLinks, explored: [{ from: "nm0", movie: "tt0", to: "nm1", side: "a" }] });
+    await press("[largest path]");
+    expect(scenes).toHaveLength(1);
+    expect(endInks(scenes[0]!).has("green")).toBe(true);
+  });
+
+  it("plays nothing when the request fails", async () => {
+    const { pick, enter, result, scenes } = setup(new Error("Path search failed: 500"));
+    await pick(0, "kevin");
+    await pick(1, "ben");
+    await enter();
+    expect(scenes).toHaveLength(0);
+    expect(result().hidden).toBe(false);
   });
 });

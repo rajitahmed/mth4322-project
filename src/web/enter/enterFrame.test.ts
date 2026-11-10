@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rowText } from "./charGrid";
+import { rowText } from "../stage/charGrid";
 import { composeFrame, isOnIcosahedron, stageLayout } from "./enterFrame";
 
 const W = 160;

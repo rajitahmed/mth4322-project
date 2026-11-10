@@ -590,3 +590,98 @@ A chronological log of how this application is being built. There is one entry p
     - Left as is (judgement calls): the FIGlet letters use `)` and `V`; the enter screen has its own animation loop (no stage exists before it); the six-argument `composeFrame`; `rowText` used by tests only.
 - **Verified:** `npm run typecheck` is clean. `npm test` runs 155 tests and all pass. `npm run build` is OK.
 - **Committed** to `main`.
+
+## 2026-11-10: Ticket #10 implemented (animation engine and tab 1 live linking)
+
+- **Asked:** `/implement` ticket #10. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Explored:**
+  - Ticket #10.
+  - `design.md` (animations, rendering, colors, glyphs).
+  - `CONTEXT.md`, and D4, D5, D16, D17 and D22.
+  - Tab 1's panel and the shape of the explored Links the server sends.
+  - The enter screen's grid, paint and halftone code.
+  - ADR 0002.
+- **Restructured first (no behaviour change):**
+  - `charGrid`, `paintGrid` and `halftone` moved from `src/web/enter/` to a new `src/web/stage/`.
+  - The enter screen's per-cell dissolve became `stage/dissolve.ts`.
+  - Its "front over halftone" composite became `overHalftone`.
+  - Its canvas sizing became `measureCanvas`.
+  - `drawLine` is now built on a new `lineCells`.
+  - `Ink` gained `green`, `red` and `spark`.
+- **Tests first (TDD), red before code:**
+  - `stage/halftone.test.ts` (`overHalftone`) and `stage/dissolve.test.ts`.
+  - `stage/stage.test.ts`, happy-dom with fake timers:
+    - plays to the end;
+    - `[skip]` and `[replay]`;
+    - a new scene replaces the old one;
+    - reduced motion;
+    - which buttons show when.
+  - `linking/linkLayout.test.ts`:
+    - the ends are on the middle row at the edges;
+    - the chain is evenly spaced along the middle row;
+    - one column step per Link;
+    - every Actor stays on the grid;
+    - Actors spread over the rows;
+    - branches don't cross;
+    - the two sides stay apart.
+  - `linking/linkingScene.test.ts`:
+    - the run lasts 5–15 s;
+    - Links are tried in order;
+    - `o` → red `+` → faded;
+    - the end is green and solid;
+    - red is only ever dotted;
+    - the gold flash and sparkles come only after the last Link;
+    - "no path" is fully red;
+    - every run is the same.
+  - `pathPanel.test.ts`:
+    - the result line is hidden while the animation plays;
+    - a path plays green;
+    - "no path" plays red;
+    - the largest path plays the same way;
+    - a failed request plays nothing.
+- **Built:**
+  - `stage/stage.ts`, the reusable engine. It plays any `Scene` (a duration and a pure `frame(t)`), with one loop, changed cells only, `[replay]`, `[skip]` and reduced motion.
+  - `linking/linkLayout.ts`: two search trees facing each other, with the answer on the middle row.
+  - `linking/linkingScene.ts`: the timeline.
+  - The panel takes a `Stage`. `main.ts` passes `createStage(reducedMotion)`.
+  - Stage CSS.
+- **Bug found by a test:** in the layout, a lone Actor on side a and a lone one on side b in the same column landed on the same cell. Fixed: side a leans up and side b down within each slot. A test was added.
+- **Performance:** the first draft built a list with an O(n²) array spread and used `Math.max(...)` over up to ~100k values. Both were replaced with loops before running on the real data.
+- **Checked in Chrome on the real data** (`DATA_DIR=data/imdb`):
+  - `[largest path]` plays the 12-Link chain across the middle row, with both trees fanning out and rejected Links red and dotted.
+  - 60 frames per second during `[replay]`. The first count of 5 fps was taken during the 325 KB fetch, not the playback.
+  - About 2 ms to build a frame and under 1 ms to paint.
+  - The browser was left alone after that, because the tab was being used.
+  - Not checked in the browser:
+    - a two-Actor search;
+    - "no path";
+    - reduced motion.
+    These are covered by unit tests.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Standards, fixed:**
+    - the scene re-implemented `drawLine`;
+    - `green` (which can hold gold) was renamed `answerInk`;
+    - the aspect constant was named and explained;
+    - `linkingOf` moved into `linking/`;
+    - `layoutLinks` was split into named steps;
+    - a stage `min-height` that could force a page scroll was removed.
+  - **Standards, left as is:**
+    - The enter screen keeps its own loop. It is not a Scene with a fixed duration.
+    - The string keys.
+    - The `[Cell, Cell]` pairs.
+  - **Spec, no blocking findings.**
+    - Kept: the 1.5 s fully red hold on "no path", so every run lasts 5–15 s.
+    - Dismissed: "answer pairs ignore the Movie". A Link is the pair of Actors (CONTEXT.md).
+    - Measured: a 6,000-Link "no path" takes ~10 ms per frame, inside the 60 fps budget.
+    - Noted, not changed: the old stale-result race on quick repeat clicks, which existed before this ticket.
+- **Decision recorded: D23.** It covers:
+  - the scene-agnostic engine;
+  - the two-tree layout and its alternatives;
+  - the fixed timeline and its alternatives;
+  - fading by per-cell dissolve;
+  - glyphs and colors;
+  - measurements;
+  - tests;
+  - running time.
+- **Verified:** `npm run typecheck` is clean. `npm test` runs 185 tests and all pass. `npm run build` is OK.
+- **Committed** to `main`.

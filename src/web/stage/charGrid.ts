@@ -1,6 +1,7 @@
 /** A screen of character cells, each with a glyph and a color token from design.md. */
 
-export type Ink = "ink" | "ink-dim" | "accent";
+/** A design.md color token. Green, red and spark only ever mean the answer, rejected, and sparkles. */
+export type Ink = "ink" | "ink-dim" | "accent" | "green" | "red" | "spark";
 
 export interface Grid {
   width: number;
@@ -36,14 +37,20 @@ function slope(dx: number, dy: number): keyof typeof SOLID {
   return dx * dy < 0 ? "rising" : "falling"; // screen y grows downwards
 }
 
-/** A straight line in cell coordinates; a dotted line fills every other cell. */
-export function drawLine(grid: Grid, x0: number, y0: number, x1: number, y1: number, ink: Ink, dotted: boolean): void {
+/** The cells of a straight line in cell coordinates, with their glyphs; a dotted line takes every other cell. */
+export function lineCells(x0: number, y0: number, x1: number, y1: number, dotted: boolean): { x: number; y: number; char: string }[] {
   const [dx, dy] = [x1 - x0, y1 - y0];
-  const glyph = (dotted ? DOTTED : SOLID)[slope(dx, dy)];
+  const char = (dotted ? DOTTED : SOLID)[slope(dx, dy)];
   const steps = Math.max(1, Math.round(Math.max(Math.abs(dx), Math.abs(dy))));
+  const cells = [];
   for (let i = 0; i <= steps; i += dotted ? 2 : 1) {
-    setCell(grid, Math.round(x0 + (dx * i) / steps), Math.round(y0 + (dy * i) / steps), glyph, ink);
+    cells.push({ x: Math.round(x0 + (dx * i) / steps), y: Math.round(y0 + (dy * i) / steps), char });
   }
+  return cells;
+}
+
+export function drawLine(grid: Grid, x0: number, y0: number, x1: number, y1: number, ink: Ink, dotted: boolean): void {
+  for (const { x, y, char } of lineCells(x0, y0, x1, y1, dotted)) setCell(grid, x, y, char, ink);
 }
 
 export function rowText(grid: Grid, y: number): string {
