@@ -284,6 +284,20 @@ describe("six degrees panel", () => {
     expect((panel.querySelector(".unlinked") as HTMLElement).hidden).toBe(true);
   });
 
+  it.each(["[shortest link]", "[best-rated link]"])("closes the list when %s is clicked, with or without a chain shown", async (mode) => {
+    const { pick, button, loaded, stage } = setup();
+    await loaded("layer 5");
+    button("[can't be linked: 3]").click();
+    button(mode).click();
+    expect(button("[can't be linked: 3]").getAttribute("aria-expanded")).toBe("false");
+    expect(stage.element.hidden).toBe(false);
+    await pick(1, "xia");
+    button("[enter]").click();
+    button("[can't be linked: 3]").click();
+    button(mode).click();
+    expect(stage.element.hidden).toBe(false);
+  });
+
   it("closes the list and shows the new count when the Center changes", async () => {
     const { pick, button, loaded, stage } = setup();
     await loaded("layer 5");

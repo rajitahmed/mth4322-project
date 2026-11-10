@@ -120,6 +120,7 @@ export function createSixDegreesPanel(searchActors: SearchActors, api: SixDegree
   selectMode(mode);
   for (const b of modeButtons) {
     b.element.addEventListener("click", () => {
+      showList(false); // the modes and the list share one row: picking a mode always brings the stage back
       if (b.mode === mode) return;
       selectMode(b.mode);
       if (shown && summary) showChain(++latest, summary, shown.actor);
