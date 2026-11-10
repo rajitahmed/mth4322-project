@@ -121,3 +121,22 @@ describe("GET /api/six-degrees/unlinked", () => {
     expect((await app.inject({ url: "/api/six-degrees/unlinked?offset=-1" })).statusCode).toBe(400);
   });
 });
+
+describe("GET /api/cycle", () => {
+  it("takes 3 to 6 repeated actor ids and returns the check's outcome", async () => {
+    const response = await app.inject({ url: "/api/cycle?actors=nm08&actors=nm05&actors=nm02" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ outcome: "not-possible", reason: "cut-actor", cutActor: { id: "nm05" } });
+  });
+
+  it("rejects fewer than 3, more than 6, or repeated Actors", async () => {
+    const url = (ids: string[]) => `/api/cycle?${ids.map((id) => `actors=${id}`).join("&")}`;
+    expect((await app.inject({ url: url(["nm01", "nm02"]) })).statusCode).toBe(400);
+    expect((await app.inject({ url: url(["nm01", "nm02", "nm03", "nm04", "nm05", "nm06", "nm07"]) })).statusCode).toBe(400);
+    expect((await app.inject({ url: url(["nm01", "nm02", "nm01"]) })).statusCode).toBe(400);
+  });
+
+  it("returns 404 for an unknown Actor", async () => {
+    expect((await app.inject({ url: "/api/cycle?actors=nm01&actors=nm02&actors=nm99" })).statusCode).toBe(404);
+  });
+});

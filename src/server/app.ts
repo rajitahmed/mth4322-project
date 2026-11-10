@@ -1,6 +1,6 @@
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
-import { CHAIN_MODES, type ChainMode } from "../shared/types";
+import { CHAIN_MODES, type ChainMode, MAX_CHOSEN_ACTORS, MIN_CHOSEN_ACTORS } from "../shared/types";
 import {
   DEFAULT_PAGE_SIZE,
   DEFAULT_SEARCH_LIMIT,
@@ -53,6 +53,28 @@ export function buildApp(operations: Operations, webDir?: string) {
   );
 
   app.get("/api/largest-path", async () => operations.largestPath());
+
+  app.get<{ Querystring: { actors: string[] } }>(
+    "/api/cycle",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          required: ["actors"],
+          properties: {
+            actors: {
+              type: "array",
+              items: { type: "string" },
+              minItems: MIN_CHOSEN_ACTORS,
+              maxItems: MAX_CHOSEN_ACTORS,
+              uniqueItems: true,
+            },
+          },
+        },
+      },
+    },
+    async (request) => operations.shortestCycle(request.query.actors),
+  );
 
   app.get<{ Querystring: { center?: string } }>(
     "/api/six-degrees",

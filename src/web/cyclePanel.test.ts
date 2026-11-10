@@ -1,0 +1,110 @@
+// @vitest-environment happy-dom
+import { describe, expect, it, vi } from "vitest";
+import type { ActorSummary, CycleCheck } from "../shared/types";
+import { createCyclePanel } from "./cyclePanel";
+
+const names = ["Ada Hart", "Ben Cole", "Cara Diaz", "Dev Ennis", "Eve Ford", "Finn Gray", "Pia Holt"];
+const actors: ActorSummary[] = names.map((name, i) => ({ id: `nm${i}`, name, birthYear: 1970 + i }));
+const [ada, , , dev, , , pia] = actors;
+
+function setup(check: CycleCheck | Error) {
+  const search = vi.fn(async (query: string) => actors.filter((a) => a.name.toLowerCase().startsWith(query)));
+  const findCycle = vi.fn(async (_ids: string[]) => {
+    if (check instanceof Error) throw check;
+    return check;
+  });
+  const panel = createCyclePanel(search, findCycle);
+  document.body.replaceChildren(panel);
+  const inputs = () => [...panel.querySelectorAll("input")];
+  const options = () => [...panel.querySelectorAll('[role="option"]')].map((o) => o.textContent);
+  const type = async (field: number, text: string) => {
+    inputs()[field]!.value = text;
+    inputs()[field]!.dispatchEvent(new Event("input"));
+    await vi.waitFor(() => expect(search).toHaveBeenLastCalledWith(text));
+    await Promise.resolve();
+  };
+  const pick = async (field: number, text: string) => {
+    await type(field, text);
+    await vi.waitFor(() => expect(panel.querySelector('[role="option"]')).not.toBeNull());
+    panel.querySelector('[role="option"]')!.dispatchEvent(new MouseEvent("mousedown"));
+  };
+  const button = (text: string) => [...panel.querySelectorAll("button")].find((b) => b.textContent === text)!;
+  const result = () => panel.querySelector(".result")!;
+  const enter = async () => {
+    button("[enter]").click();
+    await vi.waitFor(() => expect(result().textContent).not.toBe(""));
+  };
+  return { inputs, options, type, pick, button, result, enter, findCycle };
+}
+
+describe("shortest cycle panel", () => {
+  it("starts with 3 actor fields and adds one per [add actor], up to 6", () => {
+    const { inputs, button } = setup({ outcome: "shares-block" });
+    expect(inputs()).toHaveLength(3);
+    for (let i = 0; i < 5; i++) button("[add actor]").click();
+    expect(inputs()).toHaveLength(6);
+    expect(button("[add actor]").disabled).toBe(true);
+  });
+
+  it("does not suggest an Actor already picked in another field", async () => {
+    const { pick, type, options } = setup({ outcome: "shares-block" });
+    await pick(0, "ada");
+    await type(1, "ada");
+    expect(options()).toEqual([]);
+    await type(1, "ben");
+    await vi.waitFor(() => expect(options()).toEqual(["Ben Cole (1971)"]));
+  });
+
+  it("does nothing until every field has an Actor", async () => {
+    const { pick, button, result, findCycle } = setup({ outcome: "shares-block" });
+    await pick(0, "ada");
+    await pick(1, "ben");
+    button("[enter]").click();
+    expect(findCycle).not.toHaveBeenCalled();
+    expect(result().textContent).toBe("");
+  });
+
+  it("shows a fully red reason when the Actors are in different Groups", async () => {
+    const { pick, enter, result, findCycle } = setup({ outcome: "not-possible", reason: "different-groups" });
+    await pick(0, "ada");
+    await pick(1, "ben");
+    await pick(2, "cara");
+    await enter();
+    expect(findCycle).toHaveBeenCalledWith(["nm0", "nm1", "nm2"]);
+    expect(result().textContent).toBe("not possible: these actors share no chain of movies");
+    expect(result().classList.contains("not-possible")).toBe(true);
+  });
+
+  it("names the cut actor every route passes through, fully red", async () => {
+    const { pick, enter, result } = setup({ outcome: "not-possible", reason: "cut-actor", cutActor: dev!, between: [pia!, ada!] });
+    await pick(0, "pia");
+    await pick(1, "dev");
+    await pick(2, "ada");
+    await enter();
+    expect(result().textContent).toBe("not possible: every route from Pia Holt to Ada Hart passes through Dev Ennis");
+    expect(result().classList.contains("not-possible")).toBe(true);
+  });
+
+  it("says the Actors share a block when the checks pass, sending every added field", async () => {
+    const { pick, button, enter, result, findCycle } = setup({ outcome: "shares-block" });
+    button("[add actor]").click();
+    await pick(0, "ada");
+    await pick(1, "ben");
+    await pick(2, "cara");
+    await pick(3, "dev");
+    await enter();
+    expect(findCycle).toHaveBeenCalledWith(["nm0", "nm1", "nm2", "nm3"]);
+    expect(result().textContent).toBe("these actors share a block, so a cycle may exist");
+    expect(result().classList.contains("not-possible")).toBe(false);
+  });
+
+  it("says the search failed, in plain ink, when the request fails", async () => {
+    const { pick, enter, result } = setup(new Error("Cycle failed: 500"));
+    await pick(0, "ada");
+    await pick(1, "ben");
+    await pick(2, "cara");
+    await enter();
+    expect(result().textContent).toBe("search failed, try again");
+    expect(result().classList.contains("not-possible")).toBe(false);
+  });
+});

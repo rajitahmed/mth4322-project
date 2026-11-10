@@ -424,3 +424,61 @@ A chronological log of how this application is being built. There is one entry p
     - "Lowest id" means the lowest row, as D13 defines it.
 - **Verified:** `npm run typecheck` is clean. `npm test` runs 103 tests and all pass. `npm run build` is OK.
 - **Committed** to `main`.
+
+---
+
+## 2026-11-10: Ticket #7 implemented (tab 2: Cycle inputs, Group and cut-actor checks)
+
+- **Asked:** `/implement` ticket #7. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Explored:** Ticket #7, D6, `algorithms.md` §5.3, the tiny dataset's paper answers, and the existing graph, Groups, operations, API and panel code.
+- **Tests first (TDD), red before code:**
+  - Blocks (`blocks.test.ts`):
+    - On 150 seeded random graphs, "two Actors share a block" agrees with a brute-force Menger check for every pair.
+    - Every named cut actor really separates its pair.
+    - A Movie with 3 Actors is never a cut point.
+    - A ring with a tail, and the tiny dataset's Pia Holt / Dev Ennis.
+    - Mutation check: removing the merge at Movies fails 4 of the 5 tests.
+  - Operations (tiny dataset):
+    - Different Groups.
+    - Pia, Dev, Ada → cut actor Dev Ennis, between Pia and Ada.
+    - Tom, Uma, Sam Lee 1970 ("Heat, Again" only), the k = 6 ring, and Kevin, Sid, Xia all share a block.
+    - An unknown Actor is rejected.
+  - API: `/api/cycle` takes 3–6 repeated `actors`; fewer, more or repeated → 400; an unknown Actor → 404.
+  - Panel:
+    - 3 fields, `[add actor]` up to 6 (then disabled).
+    - An Actor picked in one field is not suggested in another. Mutation check: removing the filter fails this test.
+    - Nothing is sent until every field is filled.
+    - Fully red reasons for both not-possible cases; a plain "share a block" line; a plain "search failed".
+- **Built:**
+  - `src/server/blocks.ts`: an iterative Tarjan on the actor–movie graph, a union-find merge at Movies, the per-Actor block CSR, and a rooted block–cut forest. `sharedBlock` answers check 2; `cutActorBetween` names the cut actor.
+  - `src/server/cycleChecks.ts`: D6 steps 1–2 in order. It is index-based and keeps the block id for the next ticket's search.
+  - `operations.shortestCycle(ids)`: the blocks are computed once in `createOperations`, at startup.
+  - `GET /api/cycle`.
+  - `CycleCheck` and the `MIN_`/`MAX_CHOSEN_ACTORS` constants in `shared/types.ts`.
+  - Tab 2 (`src/web/cyclePanel.ts`), which replaces the placeholder fields.
+  - Glossary: **Block** and **Cut actor** added to `CONTEXT.md`.
+- **Real data check:**
+  - Blocks take ~185 ms at startup.
+  - There are 1,727 merged blocks and 846 cut actors. The largest block holds 108,122 of the main Group's 113,778 Actors.
+  - A check takes 0.05–0.4 ms.
+- **Decision recorded: D20.** It covers:
+  - the iterative Tarjan;
+  - the merge at Movies;
+  - the forest used to name the cut actor, and the Helly argument for why a pair to name always exists;
+  - the API shape;
+  - blocking duplicates at the suggestions.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Standards:**
+    - Fixed: an en dash in `operations.ts` had been written in the wrong encoding by my edit script. I fixed it and checked every edited file is valid UTF-8.
+    - Fixed: a variable named `number` was renamed to `mergedId`.
+    - Flagged: the block–cut forest has its own small BFS. Kept, and D20 now says why: it walks a different graph (Actors and blocks) once at startup, and the shared BFS stays the one search over Actors and Movies.
+    - Left as is (judgement calls):
+      - The node-offset helpers are repeated.
+      - `IndexCycleCheck` and `CycleCheck` are two types, matching the existing `IndexChain` / `Chain` split.
+    - The missing chat log entry is this one.
+  - **Spec:**
+    - Every criterion is met.
+    - The Tarjan iteration, the merge and the cut-actor path were checked correct.
+    - Extra but kept: naming the pair the cut actor splits, which makes the reason readable.
+- **Verified:** `npm run typecheck` is clean. `npm test` runs 123 tests and all pass. `npm run build` is OK.
+- **Committed** to `main`.

@@ -32,6 +32,14 @@ _Avoid_: Terminal, input actor
 A closed chain of Links that visits every Chosen Actor, may pass through other Actors, and never repeats an Actor. A Movie may supply more than one of its Links. Its length is its number of Links.
 _Avoid_: Loop, ring, tour
 
+**Block**:
+A largest set of Actors in which no single Actor's removal splits any two of them apart. A Cycle always stays inside one Block. A Movie never splits a Block, because a Cycle may reuse it.
+_Avoid_: Component, biconnected component (in the UI)
+
+**Cut actor**:
+An Actor every route between two other Actors passes through. No Cycle can hold both of them.
+_Avoid_: Articulation point, bridge
+
 **Center**:
 The one Actor a Six Degrees search starts from (Kevin Bacon by default).
 _Avoid_: Source, root, hub

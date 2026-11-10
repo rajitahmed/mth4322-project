@@ -310,3 +310,30 @@ describe("six degrees", () => {
     expect(other.layerSummary()).toMatchObject({ center: { id: "x0" }, layerCounts: [1, 1] });
   });
 });
+
+describe("shortestCycle checks (D6 steps 1–2)", () => {
+  it("is not possible for Chosen Actors in different Groups", () => {
+    expect(operations.shortestCycle(["nm01", "nm02", "nm15"])).toEqual({ outcome: "not-possible", reason: "different-groups" });
+  });
+
+  it("is not possible through the tiny dataset's cut actor, and names Dev Ennis", () => {
+    const result = operations.shortestCycle(["nm08", "nm05", "nm02"]);
+    expect(result).toMatchObject({ outcome: "not-possible", reason: "cut-actor" });
+    if (result.outcome !== "not-possible" || result.reason !== "cut-actor") throw new Error("expected a cut actor");
+    expect(result.cutActor.id).toBe("nm05");
+    expect(result.between.map((a) => a.id)).toEqual(["nm08", "nm02"]);
+  });
+
+  it("passes the checks for Actors joined only through one Movie with 3+ Actors (a Movie is never a cut point)", () => {
+    expect(operations.shortestCycle(["nm09", "nm10", "nm11"])).toEqual({ outcome: "shares-block" });
+  });
+
+  it("passes the checks for the k = 6 ring and for Kevin Bacon, Sid Moss, Xia Ortiz", () => {
+    expect(operations.shortestCycle(["nm02", "nm03", "nm04", "nm05", "nm06", "nm07"])).toEqual({ outcome: "shares-block" });
+    expect(operations.shortestCycle(["nm01", "nm12", "nm14"])).toEqual({ outcome: "shares-block" });
+  });
+
+  it("rejects an unknown Actor", () => {
+    expect(() => operations.shortestCycle(["nm01", "nm02", "nm99"])).toThrow(UnknownActorError);
+  });
+});

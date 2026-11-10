@@ -3,6 +3,7 @@ import type {
   Chain,
   ChainMode,
   ChainToCenter,
+  CycleCheck,
   FoundPath,
   LayerSummary,
   MovieSummary,
@@ -11,6 +12,8 @@ import type {
 } from "../shared/types";
 import { createActorSearch, nameMatcher } from "./actorSearch";
 import { chainTo, type IndexChain } from "./bfs";
+import { findBlocks } from "./blocks";
+import { checkCycle } from "./cycleChecks";
 import { type Graph, moviesOf } from "./graph";
 import { largestPath } from "./largestPath";
 import { recentCache } from "./recentCache";
@@ -36,8 +39,8 @@ export class UnknownActorError extends Error {
 /**
  * The one module behind which every operation sits. It takes the graph as its
  * only input; the API and the tests both go through it. The largest finite
- * shortest path and the default Center's Layers are computed here, once, when
- * the module is created (DECISIONS D5, D12).
+ * shortest path, the default Center's Layers and the blocks are computed here,
+ * once, when the module is created (DECISIONS D5, D12, D20).
  */
 export function createOperations(graph: Graph) {
   const movieCounts = graph.actors.map((_, a) => moviesOf(graph, a).length);
@@ -89,6 +92,8 @@ export function createOperations(graph: Graph) {
     const center = id === undefined ? defaultCenter : indexOf(id);
     return { center, around: center === defaultCenter ? defaultLayers : recentLayers(center) };
   };
+
+  const blocks = findBlocks(graph);
 
   return {
     /** Actors whose name has a word starting with the query, best match first. */
@@ -144,6 +149,19 @@ export function createOperations(graph: Graph) {
       if (search.distance[actor] === -1) return { found: false };
       const chain = chainTo(mode === "shortest" ? search : bestRatedParents, actor);
       return { found: true, ...chainOf(chain), ...chainRatings(graph, chain) };
+    },
+
+    /**
+     * The shortest Cycle through 3 to 6 distinct Chosen Actors. For now, only the
+     * checks before the search (D6 steps 1–2): different Groups, a cut actor, or
+     * they share a block.
+     */
+    shortestCycle(ids: string[]): CycleCheck {
+      const check = checkCycle(graph, blocks, ids.map(indexOf));
+      if (check.outcome === "shares-block") return { outcome: "shares-block" };
+      if (check.reason === "different-groups") return check;
+      const [a, b] = check.between;
+      return { ...check, cutActor: actorAt(check.cutActor), between: [actorAt(a), actorAt(b)] };
     },
 
     /** One page of the Actors who can't be linked to the Center, in id order, filtered by name. */

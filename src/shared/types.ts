@@ -66,3 +66,18 @@ export interface UnlinkedPage {
   total: number;
   actors: ActorSummary[];
 }
+
+/** How many Actors a Cycle search takes (the brief: 3, up to 6). */
+export const MIN_CHOSEN_ACTORS = 3;
+export const MAX_CHOSEN_ACTORS = 6;
+
+/**
+ * The checks run before a Cycle search (DECISIONS D6 steps 1–2): not possible
+ * because the Chosen Actors are in different Groups, or because every route
+ * between two of them passes through one cut actor; otherwise they share a
+ * block, and the search (next) runs inside it.
+ */
+export type CycleCheck =
+  | { outcome: "not-possible"; reason: "different-groups" }
+  | { outcome: "not-possible"; reason: "cut-actor"; cutActor: ActorSummary; between: [ActorSummary, ActorSummary] }
+  | { outcome: "shares-block" };
