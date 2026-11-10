@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { searchLayers } from "./bfs";
 import { buildGraph, type Graph } from "./graph";
 import { type LargestPath, largestPath } from "./largestPath";
+import { seededRandom } from "./testGraphs";
 
 /**
  * The baseline iFUB must agree with (algorithms.md §3.1): BFS from every Actor,
@@ -20,13 +21,9 @@ function naiveLargest(graph: Graph): LargestPath {
   return best;
 }
 
-/** A small random graph: `movies` Movies, each with 2–4 Actors picked from `actors` (seeded, so runs repeat). */
-function randomGraph(seed: number, actors: number, movies: number): Graph {
-  let state = seed;
-  const random = (n: number) => {
-    state = (state * 1103515245 + 12345) % 2147483648;
-    return state % n;
-  };
+/** A small random graph where every Movie links Actors: `movies` Movies, each with 2–4 Actors picked from `actors` (seeded, so runs repeat). */
+function randomPairedGraph(seed: number, actors: number, movies: number): Graph {
+  const random = seededRandom(seed);
   const actorIds = Array.from({ length: actors }, (_, i) => `nm${i}`);
   const credits = Array.from({ length: movies }, (_, m) => {
     const cast = new Set(Array.from({ length: 2 + random(3) }, () => actorIds[random(actors)]!));
@@ -42,14 +39,14 @@ function randomGraph(seed: number, actors: number, movies: number): Graph {
 describe("largestPath (iFUB with a 4-sweep start)", () => {
   it("matches a BFS from every Actor on many random graphs with several Groups: same Distance, same lowest-id pair", () => {
     for (let seed = 1; seed <= 200; seed++) {
-      const graph = randomGraph(seed, 10 + (seed % 30), 5 + (seed % 25));
+      const graph = randomPairedGraph(seed, 10 + (seed % 30), 5 + (seed % 25));
       expect(largestPath(graph), `seed ${seed}`).toEqual(naiveLargest(graph));
     }
   });
 
   it("returns endpoints in the same Group, at exactly that Distance", () => {
     for (let seed = 1; seed <= 50; seed++) {
-      const graph = randomGraph(seed, 25, 15);
+      const graph = randomPairedGraph(seed, 25, 15);
       const { distance, a, b } = largestPath(graph);
       expect(graph.actorGroup[a]).toBe(graph.actorGroup[b]);
       expect(searchLayers(graph, a).search.distance[b]).toBe(distance);

@@ -383,3 +383,104 @@ Algorithmic decisions for the 3 operations and the data filter, in chronological
   - Tiny dataset (paper answers): Kevin, Ada, Sam Lee 1988 → different Groups. Pia, Dev, Ada → cut actor Dev Ennis, between Pia and Ada. Tom, Uma, Sam Lee 1970 (only through "Heat, Again"), the k = 6 ring, and Kevin, Sid, Xia all share a block.
 - **Measured on the real data** (119,458 Actors): the blocks and the forest take **~185 ms** at startup. There are 1,727 merged blocks and 846 cut actors; the largest block holds 108,122 of the main Group's 113,778 Actors. A check takes 0.05–0.4 ms (Kevin Bacon, Tom Hanks, Meryl Streep share a block, and so do Bacon, Pitt, DiCaprio, Cruise, Roberts, Freeman).
 - **Running time:** O(A + M + C) at startup (one DFS, near-linear union-find, one BFS over a forest of A + B nodes). Space O(A + M) temporary, O(A + B) kept. Per request: O(k) Group lookups, O(k · blocks per Actor) for the shared block, and O(k² · forest depth) at worst to name the cut actor.
+
+## D21: Cycle search in code: IDA* over block co-stars, Held–Karp bound, the shared BFS, one worker thread per search (operation 2)
+
+- **Date:** 2026-11-10
+- **Decisions (D6 steps 3–4, D7, D8, D9, as written in `src/server/cycleSearch.ts`, `cycleWorker.ts`, `cycleWorkerEntry.ts`):**
+  - **IDA* exactly as D7.**
+    - It is a depth-first search from Chosen Actor #1 with a budget L.
+    - A branch to co-star w is **rejected** when length so far + 1 + h(w, Chosen Actors still to visit) > L.
+    - L starts at h(#1, all the others) and rises by 1 after each pass that finds nothing.
+    - **The answer is `no-cycle` (D6 step 4) as soon as either of these holds:**
+      - **A pass rejects nothing** (added after code review). The budget is the only thing a pass depends on, and if it cut no branch, that pass already tried every simple route from #1. A bigger L would repeat the same search and find nothing.
+      - **L passes the block's Actor count.** D6's bound, kept as the guarantee that the loop ends.
+    - Why the early stop matters: without it, a no-cycle search keeps re-running the same complete search until L reaches the block size, which is 108,122 on the real data. On K₂,₃₀₀ (300 Actors linked only to 2 hubs), the search took **46.6 s** without the stop and stops at L = 10 with it.
+    - Only Actors are marked used, so one Movie can supply every Link of a Cycle.
+    - **When a Cycle closes:** the DFS has visited every Chosen Actor and reaches a co-star that is #1. No length check is needed there. The prune already guaranteed length + d(v, #1) ≤ L, and every smaller budget was searched in full and found nothing, so the Cycle's length is exactly L.
+    - Alternative: A* with a priority queue. Rejected in D7 because of memory; IDA* keeps only the current path.
+  - **Co-stars are generated on the fly, inside the block only.**
+    - For the current Actor, walk its Movies (lowest index first) and their casts, and keep the Actors in the block. Remember the first (lowest-index) Movie for each co-star, then sort by Actor index.
+    - Lowest id first makes the result deterministic (D8). The lowest-index Movie is the one shown for each Link.
+    - Alternative: build the actor–actor adjacency of the block once. Rejected: on the real data that is the clique expansion D1 refused (cast size squared per Movie), for a block of 108,122 Actors.
+    - Alternative: cache each Actor's co-star list across passes. Rejected for now (YAGNI): the measured searches are already fast (below).
+  - **"In the block" is one `Uint8Array` flag per Actor**, filled from D20's block CSR in O(A). The count of flags is the block size, the D6 step 4 limit.
+  - **The lower bound h uses the one shared BFS** (`searchLayers` in `bfs.ts`) from each Chosen Actor, over the whole Group, not just the block.
+    - The distances are the same either way. A shortest path is simple, and a simple path between two Actors of a block can't leave the block: it would have to leave and come back through the same cut actor.
+    - So the shared BFS, unchanged, gives exactly D7's distances, and BFS is still written once.
+  - **h by Held–Karp, precomputed per search.**
+    - finish[R][j] = the shortest way from Chosen Actor j through the rest of R and back to #1, using BFS distances. It is stored for every subset R of the other Chosen Actors as a bitmask (at most 2⁵ × 6 entries) and built in increasing mask order.
+    - Then h(v, R) = min over j in R of d(v, cⱼ) + finish[R][j], or d(v, #1) when R is empty. Each h takes at most 5 lookups.
+    - Alternative: brute force over the orders of R at every node (at most 120 orders). Rejected: h is called for every branch, so the precomputation pays for itself at once.
+    - **Admissible** (D7): every leg of a real finish is a real path, so it is at least as long as its BFS distance.
+  - **The DFS is recursive.** Its depth is at most L, because each step costs a Link and h ≥ 1 away from #1. L is small for any search that finishes. Unlike Tarjan (D20), it never goes tens of thousands deep.
+  - **Animation payload (D8).**
+    - Each pass starts a fresh list. A rejected branch is kept as (from, Movie, to) while the list holds fewer than `MAX_REJECTED` = 300; after that it is only counted, in `moreRejected`.
+    - The list returned is from the final pass: the one that found the Cycle, or the last pass at L = block size.
+    - `moreRejected` > 0 is the "cut short" flag, so one number serves as both the flag and the count.
+  - **One worker thread per search (D9).**
+    - `operations.shortestCycle` runs the checks on the request thread (they are O(k)). Then it sends `{ links, actorBlocks, block, chosen }` to a new `worker_threads` Worker and awaits the answer. The worker exits once it has answered.
+    - **Only the Links are sent:** the graph's two CSRs, not the Actor and Movie records. `graph.ts` and `bfs.ts` now accept a narrower `Links` type for this. The CSRs are copied (structured clone), a few MB for the real data.
+    - **Loading TypeScript in the worker:**
+      - The app runs under tsx, but a worker does not inherit tsx's import hooks, and in a test there is no loader at all. `--import tsx` alone failed to resolve the extensionless imports.
+      - So the worker starts from a one-line bootstrap that calls tsx's `tsImport` on `cycleWorkerEntry.ts`.
+      - Measured cost: about 0.25 s per search to start the worker.
+    - Alternative: one long-lived worker that loads the graph itself. Rejected: a slow search would queue every other Cycle request behind it, and the worker would hold a second copy of the whole dataset.
+    - Alternative: `SharedArrayBuffer` for the CSRs, so nothing is copied. Rejected for now: the copy is cheap, and shared buffers would change how the graph is built.
+    - Alternative: run the search on the request thread, yielding every N branches. Rejected: it would tangle the algorithm with scheduling, and the k full BFS runs would still block.
+  - **Answer shape:** `ShortestCycle` in `src/shared/types.ts`, replacing the earlier `CycleCheck`.
+    - `found`: the length, the Actors, the Movies (the last Movie closes back to Actor #1), `rejected` and `moreRejected`.
+    - `not-possible`, with reason `different-groups`, `cut-actor` or `no-cycle`. `no-cycle` also carries the rejections.
+    - `GET /api/cycle` is unchanged; it now waits for the search.
+  - **Tab 2:**
+    - Shows `searching…` while waiting.
+    - Then shows the Cycle, for example `length 3: Tom Irwin — Heat, Again — Uma Jones — Heat, Again — Sam Lee — Heat, Again — Tom Irwin`, or, fully red, "not possible: no cycle through all of them exists without repeating an actor".
+    - The rejected branches are for the animation ticket (#11).
+- **Tests:**
+  - **Brute force agreement.** On 60 seeded random graphs, IDA* agrees with a brute-force enumeration of every simple cycle, for every 3 and 4 Actors sharing a block. That is over 2,000 Cycles found and 20+ "no cycle" cases.
+  - **Validity.** Every Cycle found has all Chosen Actors, #1 first, no repeats, every Link a shared Movie, and it closes.
+  - **Mutation check.** Making h overestimate by 1 fails 4 of the 6 search tests.
+  - **Early stop.** K₂,₃₀₀ must answer `no-cycle` in under 1 s. It failed at 46.6 s before the fix.
+  - **Small graphs:**
+    - one Movie supplies every Link;
+    - the k = 6 ring;
+    - K₂,₃ (shares a block, but no Cycle);
+    - `algorithms.md` §5.5's worked example, with its one rejected branch (Bob → Dan);
+    - the 300 cap, with the rest counted.
+  - **Tiny dataset (paper answers):**
+    - Tom, Uma, Sam Lee 1970 → 3, every Link "Heat, Again".
+    - Kevin, Sid, Xia → 4. Ada is outside the block, so she is never tried.
+    - The ring → 6.
+  - **Responsiveness.** A no-cycle graph takes ~0.8 s to exhaust, and a `/api/path` request sent after the Cycle request is answered first. Running the search on the request thread instead fails this test.
+- **Bug found and fixed in the test helpers:**
+  - The seeded random generator used by the blocks (D20) and iFUB (D17) property tests computed `state * 1103515245` in floating point, which loses the low bits past 2⁵³. `state % n` then became constant, and every random Movie's cast was `[0]`. Those tests were checking almost nothing.
+  - Now one `seededRandom` in `src/server/testGraphs.ts` (32-bit, `Math.imul`, high bits) serves all of them. The blocks and iFUB tests still pass on the real random graphs.
+- **Measured on the real data** (each time includes ~0.25 s to start the worker):
+  - Bacon, Hanks, Streep → length 3 in 0.44 s.
+  - Bacon, Pitt, DiCaprio, Cruise → 5 in 0.45 s.
+  - Bacon, Pitt, DiCaprio, Cruise, Roberts, Freeman → 7 in 0.48 s.
+  - Five random triples of mostly obscure Actors: lengths 8–18, 0.4–5.8 s. The slowest pruned 15.6 million branches.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Spec:**
+    - Every acceptance criterion is met.
+    - IDA*, the closing condition and the rejection recording were checked correct.
+    - Fixed: the repeated full passes after the search was already complete (the early stop above).
+    - **Known gaps, kept on purpose (D9 asks for no time limit):**
+      - A search keeps running after the browser leaves.
+      - Nothing limits how many workers run at once.
+      - The worker needs tsx at run time, which the `start` script already uses.
+      - Revisit all three with D9's background-job option if Render shows a problem.
+  - **Standards:**
+    - No hard violations.
+    - Fixed: the comments say "rejected", the glossary term, not "pruned".
+    - Fixed: `finishFrom` → `lowerBoundFrom`, `extend` → `searchFrom`.
+    - Fixed: the duplicated test helper `coStars` moved into `testGraphs.ts`.
+    - Fixed: `largestPath.test.ts`'s own `randomGraph` (casts of 2–4) is renamed `randomPairedGraph`, so it no longer clashes with the shared one.
+    - **Left as is (judgement calls):**
+      - The index/id type pairs (`IndexLink`/`Link`), which follow the existing `IndexChain`/`Chain` split.
+      - Reusing `chainText` for the Cycle line by appending Actor #1.
+      - The two `expectValidCycle` helpers, one per layer (index and id).
+- **Running time:**
+  - Time: as D7. k · O(A + M + C) for the BFS runs, O(2ᵏ · k²) for Held–Karp, and O(A) to flag the block. Then the IDA* is exponential in the worst case, with at most (block size) passes, and it stops after the first pass that rejects nothing. Each node costs O(its Movies' casts + d log d) to list its d co-stars.
+  - Space: O(k · A + M) for the distances and flags, plus the path (depth ≤ L) and one co-star list per level.
+  - Per request, the worker also copies the Links: O(A + M + C).

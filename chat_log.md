@@ -482,3 +482,68 @@ A chronological log of how this application is being built. There is one entry p
     - Extra but kept: naming the pair the cut actor splits, which makes the reason readable.
 - **Verified:** `npm run typecheck` is clean. `npm test` runs 123 tests and all pass. `npm run build` is OK.
 - **Committed** to `main`.
+
+---
+
+## 2026-11-10: Ticket #8 implemented (tab 2: shortest Cycle search, IDA* in a worker)
+
+- **Asked:** `/implement` ticket #8. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Explored:**
+  - Ticket #8, D6–D9 and D20.
+  - `algorithms.md` §5.4–5.5 and the tiny dataset's paper answers.
+  - The existing BFS, blocks, Cycle checks, operations, API and tab 2 code.
+- **Tests first (TDD), red before code:**
+  - Search (`cycleSearch.test.ts`):
+    - Agrees with a brute-force enumeration of every simple cycle on 60 seeded random graphs (13,000+ comparisons in tuning, 100+ of them "no cycle").
+    - Every Cycle found is valid: all Chosen Actors, #1 first, no repeats, every Link a shared Movie, and it closes.
+    - One Movie supplies every Link; the k = 6 ring; K₂,₃ (shares a block, no Cycle).
+    - The worked example of §5.5, with its one rejected branch; the 300 cap, with the rest counted.
+    - Mutation check: making the lower bound overestimate fails 4 tests.
+  - Operations (tiny dataset, paper answers):
+    - Tom, Uma, Sam Lee 1970 → 3, all "Heat, Again".
+    - Kevin, Sid, Xia → 4.
+    - The ring → 6.
+    - K₂,₃ → no-cycle.
+    - Different Groups, cut actor, and an unknown Actor (now async).
+  - API:
+    - `/api/cycle` returns the Cycle with its Movies.
+    - A `/api/path` request is answered while a ~0.8 s Cycle search runs. Mutation check: running the search on the request thread fails this test.
+  - Panel:
+    - Shows `searching…` while waiting.
+    - Shows `length 3: Ada Hart — Heat — Ben Cole — Heat — Cara Diaz — Heat — Ada Hart`.
+    - Shows the fully red "no cycle" reason.
+- **Bug found in the existing tests:** the seeded random generator used by the blocks and iFUB property tests lost precision in floating point, so every random cast was `[0]`, and those tests checked almost nothing. Fixed with one 32-bit `seededRandom` in the new `src/server/testGraphs.ts`; the blocks and iFUB tests still pass on real random graphs.
+- **Built:**
+  - `src/server/cycleSearch.ts`: IDA* over block co-stars generated on the fly, an h lower bound from the shared BFS with Held–Karp, and the capped rejected branches.
+  - `src/server/cycleWorker.ts` and `cycleWorkerEntry.ts`: one worker thread per search, which gets only the graph's Links. TypeScript is loaded through tsx's `tsImport`, because `--import tsx` doesn't reach a worker.
+  - `graph.ts` and `bfs.ts` take a narrower `Links` type.
+  - `operations.shortestCycle` is async: the checks run, then the worker searches.
+  - `ShortestCycle` replaces `CycleCheck` in `shared/types.ts`.
+  - Tab 2 shows `searching…`, then the Cycle or the red reason.
+  - **Rejected branch** added to `CONTEXT.md`, and a note in `algorithms.md` §5.4.
+- **Real data check** (each search includes ~0.25 s to start the worker):
+  - Bacon/Hanks/Streep → 3 in 0.44 s.
+  - Bacon/Pitt/DiCaprio/Cruise → 5 in 0.45 s.
+  - Six famous Actors → 7 in 0.48 s.
+  - Random obscure triples → lengths 8–18 in 0.4–5.8 s.
+- **Decision recorded: D21.** It covers:
+  - IDA* details and the closing condition;
+  - co-stars on the fly;
+  - the whole-Group BFS, and why its distances equal the in-block ones;
+  - Held–Karp;
+  - the payload;
+  - the worker design and its alternatives;
+  - the measurements.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Spec:**
+    - Every criterion is met.
+    - Fixed: after the search had tried every route, it kept re-running the same full pass until L reached the block size (46.6 s on K₂,₃₀₀). It now stops at the first pass that rejects nothing. A test was added: red at 46.6 s, then green.
+    - Noted in D21 as known gaps: a search is not cancelled when the browser leaves, and nothing limits how many workers run at once.
+  - **Standards:**
+    - No hard violations.
+    - Fixed: "pruned" → "rejected" in comments, and clearer names (`lowerBoundFrom`, `searchFrom`).
+    - Fixed: the duplicated `coStars` test helper moved to `testGraphs.ts`.
+    - Fixed: `largestPath.test.ts`'s clashing `randomGraph` renamed.
+    - Left as is (judgement calls): the index/id type pairs, and reusing `chainText`.
+- **Verified:** `npm run typecheck` is clean. `npm test` runs 136 tests and all pass. `npm run build` is OK.
+- **Committed** to `main`.

@@ -40,6 +40,10 @@ _Avoid_: Component, biconnected component (in the UI)
 An Actor every route between two other Actors passes through. No Cycle can hold both of them.
 _Avoid_: Articulation point, bridge
 
+**Rejected branch**:
+A Link the Cycle search tried and gave up on, because no Cycle through it could be short enough. The animation shows the ones from the search's final pass.
+_Avoid_: Pruned edge, dead end
+
 **Center**:
 The one Actor a Six Degrees search starts from (Kevin Bacon by default).
 _Avoid_: Source, root, hub

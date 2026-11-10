@@ -3,10 +3,11 @@ import type {
   Chain,
   ChainMode,
   ChainToCenter,
-  CycleCheck,
   FoundPath,
   LayerSummary,
+  Link,
   MovieSummary,
+  ShortestCycle,
   ShortestPath,
   UnlinkedPage,
 } from "../shared/types";
@@ -14,6 +15,8 @@ import { createActorSearch, nameMatcher } from "./actorSearch";
 import { chainTo, type IndexChain } from "./bfs";
 import { findBlocks } from "./blocks";
 import { checkCycle } from "./cycleChecks";
+import type { IndexLink } from "./cycleSearch";
+import { searchCycleInWorker } from "./cycleWorker";
 import { type Graph, moviesOf } from "./graph";
 import { largestPath } from "./largestPath";
 import { recentCache } from "./recentCache";
@@ -94,6 +97,9 @@ export function createOperations(graph: Graph) {
   };
 
   const blocks = findBlocks(graph);
+  /** Only the Links go to a Cycle worker: the Actor and Movie records stay here. */
+  const links = { actorMovies: graph.actorMovies, movieActors: graph.movieActors };
+  const linkOf = ({ from, movie, to }: IndexLink): Link => ({ from: actorAt(from).id, movie: movieAt(movie).id, to: actorAt(to).id });
 
   return {
     /** Actors whose name has a word starting with the query, best match first. */
@@ -152,16 +158,28 @@ export function createOperations(graph: Graph) {
     },
 
     /**
-     * The shortest Cycle through 3 to 6 distinct Chosen Actors. For now, only the
-     * checks before the search (D6 steps 1–2): different Groups, a cut actor, or
-     * they share a block.
+     * The shortest Cycle through 3 to 6 distinct Chosen Actors (D6–D9): the
+     * checks first (different Groups, a cut actor), then IDA* inside their
+     * block, in a worker thread so other requests are answered meanwhile.
      */
-    shortestCycle(ids: string[]): CycleCheck {
-      const check = checkCycle(graph, blocks, ids.map(indexOf));
-      if (check.outcome === "shares-block") return { outcome: "shares-block" };
-      if (check.reason === "different-groups") return check;
-      const [a, b] = check.between;
-      return { ...check, cutActor: actorAt(check.cutActor), between: [actorAt(a), actorAt(b)] };
+    async shortestCycle(ids: string[]): Promise<ShortestCycle> {
+      const chosen = ids.map(indexOf);
+      const check = checkCycle(graph, blocks, chosen);
+      if (check.outcome === "not-possible") {
+        if (check.reason === "different-groups") return check;
+        const [a, b] = check.between;
+        return { ...check, cutActor: actorAt(check.cutActor), between: [actorAt(a), actorAt(b)] };
+      }
+      const search = await searchCycleInWorker({ links, actorBlocks: blocks.actorBlocks, block: check.block, chosen });
+      const rejections = { rejected: search.rejected.map(linkOf), moreRejected: search.moreRejected };
+      if (!search.found) return { outcome: "not-possible", reason: "no-cycle", ...rejections };
+      return {
+        outcome: "found",
+        length: search.actors.length,
+        actors: search.actors.map(actorAt),
+        movies: search.movies.map(movieAt),
+        ...rejections,
+      };
     },
 
     /** One page of the Actors who can't be linked to the Center, in id order, filtered by name. */

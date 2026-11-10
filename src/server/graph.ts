@@ -16,6 +16,9 @@ export interface Graph {
   groupCount: number;
 }
 
+/** Just the Links of the graph, both directions: all a search needs, and small enough to hand to a worker (D9). */
+export type Links = Pick<Graph, "actorMovies" | "movieActors">;
+
 export function buildGraph({ actors, movies, credits }: Dataset): Graph {
   const actorIndex = indexById(actors);
   const movieIndex = indexById(movies);
@@ -32,12 +35,12 @@ export function buildGraph({ actors, movies, credits }: Dataset): Graph {
 }
 
 /** The Movies an Actor is in, lowest index first. */
-export function moviesOf(graph: Graph, actor: number): Int32Array {
+export function moviesOf(graph: Links, actor: number): Int32Array {
   return row(graph.actorMovies, actor);
 }
 
 /** The Actors in a Movie, lowest index first. */
-export function actorsIn(graph: Graph, movie: number): Int32Array {
+export function actorsIn(graph: Links, movie: number): Int32Array {
   return row(graph.movieActors, movie);
 }
 

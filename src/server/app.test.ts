@@ -3,6 +3,7 @@ import { buildApp } from "./app";
 import { loadDataset } from "./dataset";
 import { buildGraph } from "./graph";
 import { createOperations } from "./operations";
+import { graphOf } from "./testGraphs";
 
 const operations = createOperations(buildGraph(loadDataset("data/tiny")));
 const app = buildApp(operations);
@@ -138,5 +139,27 @@ describe("GET /api/cycle", () => {
 
   it("returns 404 for an unknown Actor", async () => {
     expect((await app.inject({ url: "/api/cycle?actors=nm01&actors=nm02&actors=nm99" })).statusCode).toBe(404);
+  });
+
+  it("returns the shortest Cycle with the Movie for each Link", async () => {
+    const response = await app.inject({ url: "/api/cycle?actors=nm09&actors=nm10&actors=nm11" });
+    expect(response.json()).toMatchObject({ outcome: "found", length: 3, movies: [{ id: "tt10" }, { id: "tt10" }, { id: "tt10" }] });
+  });
+
+  it("answers other requests while a long Cycle search runs in its worker", async () => {
+    // K₂,₃ (Actors 0, 1, 2 linked only to the hubs 3 and 4) plus 8 Actors in one Movie with both hubs:
+    // no Cycle exists, and proving it tries about half a million branches.
+    const extras = Array.from({ length: 8 }, (_, i) => 5 + i);
+    const slow = buildApp(createOperations(graphOf(13, [0, 1, 2].flatMap((c) => [[c, 3], [c, 4]]).concat([[3, 4, ...extras]]))));
+    const finished: string[] = [];
+    const cycle = slow.inject({ url: "/api/cycle?actors=nm0&actors=nm1&actors=nm2" }).then((response) => {
+      finished.push("cycle");
+      return response;
+    });
+    const path = await slow.inject({ url: "/api/path?a=nm5&b=nm0" });
+    finished.push("path");
+    expect(path.json()).toMatchObject({ found: true, distance: 2 });
+    expect(finished).toEqual(["path"]);
+    expect((await cycle).json()).toMatchObject({ outcome: "not-possible", reason: "no-cycle" });
   });
 });

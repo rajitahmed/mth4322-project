@@ -306,6 +306,8 @@ The simplest case is an actor with only **one co-star**. That co-star is a cut a
 
 Run **BFS from each Chosen Actor** inside the block, k runs in total. Now d(v, cᵢ) is known for every actor v and every Chosen Actor cᵢ.
 
+- In code, this is the same shared BFS run over the whole Group (D21). It gives the same distances, because a shortest path between two actors of a block never leaves the block. Leaving would mean coming back through the same cut actor twice.
+
 #### Ingredient 2: a lower bound h for finishing (the "heuristic")
 
 Suppose we're partway through building a Cycle. We're at actor v, and the Chosen Actors R = {r₁, r₂, …} still have to be visited before returning to Chosen Actor #1 (call it c₁). Then:
@@ -327,6 +329,7 @@ loop:
     if L > (actors in block): return NOT POSSIBLE          # check 4
     result ← DFS(c₁, length=0, used={c₁}, remaining=Chosen − {c₁})
     if result: return result                               # the first one found is the shortest
+    if nothing was pruned: return NOT POSSIBLE             # that pass tried every route (D21)
     L ← L + 1
 
 DFS(v, length, used, remaining):

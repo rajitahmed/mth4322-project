@@ -71,13 +71,32 @@ export interface UnlinkedPage {
 export const MIN_CHOSEN_ACTORS = 3;
 export const MAX_CHOSEN_ACTORS = 6;
 
+/** A Link by id: from an Actor, through a Movie, to a co-star. */
+export interface Link {
+  from: string;
+  movie: string;
+  to: string;
+}
+
 /**
- * The checks run before a Cycle search (DECISIONS D6 steps 1–2): not possible
- * because the Chosen Actors are in different Groups, or because every route
- * between two of them passes through one cut actor; otherwise they share a
- * block, and the search (next) runs inside it.
+ * The final IDA* pass's rejected branches, in the order tried (for the animation,
+ * DECISIONS D8): at most a few hundred, and how many more there were (0 when the list was not cut short).
  */
-export type CycleCheck =
+export interface RejectedBranches {
+  rejected: Link[];
+  moreRejected: number;
+}
+
+/**
+ * The shortest Cycle through 3 to 6 Chosen Actors (DECISIONS D6–D8). Not
+ * possible because they are in different Groups, because every route between
+ * two of them passes through one cut actor, or because the search ran out
+ * ("no-cycle"). Otherwise the Cycle: `movies[i]` links `actors[i]` and
+ * `actors[i + 1]`, and the last Movie links back to `actors[0]`. Its length is
+ * the answer; the Cycle is one example.
+ */
+export type ShortestCycle =
   | { outcome: "not-possible"; reason: "different-groups" }
   | { outcome: "not-possible"; reason: "cut-actor"; cutActor: ActorSummary; between: [ActorSummary, ActorSummary] }
-  | { outcome: "shares-block" };
+  | ({ outcome: "not-possible"; reason: "no-cycle" } & RejectedBranches)
+  | ({ outcome: "found"; length: number; actors: ActorSummary[]; movies: MovieSummary[] } & RejectedBranches);

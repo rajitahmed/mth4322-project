@@ -1,4 +1,5 @@
-import { actorsIn, type Graph, moviesOf } from "./graph";
+import { rowCount } from "./csr";
+import { actorsIn, type Links, moviesOf } from "./graph";
 
 /**
  * One breadth-first search on the actor–movie graph (DECISIONS D2, D16). The only
@@ -15,12 +16,13 @@ export interface Search {
   movieSeen: Uint8Array;
 }
 
-export function startSearch(graph: Graph, start: number): Search {
+export function startSearch(graph: Links, start: number): Search {
+  const actorCount = rowCount(graph.actorMovies);
   const search: Search = {
-    distance: new Int32Array(graph.actors.length).fill(-1),
-    parentActor: new Int32Array(graph.actors.length).fill(-1),
-    parentMovie: new Int32Array(graph.actors.length).fill(-1),
-    movieSeen: new Uint8Array(graph.movies.length),
+    distance: new Int32Array(actorCount).fill(-1),
+    parentActor: new Int32Array(actorCount).fill(-1),
+    parentMovie: new Int32Array(actorCount).fill(-1),
+    movieSeen: new Uint8Array(rowCount(graph.movieActors)),
   };
   search.distance[start] = 0;
   return search;
@@ -31,7 +33,7 @@ export function startSearch(graph: Graph, start: number): Search {
  * reached Actors, lowest index first. Frontier Actors and their Movies are
  * walked in index order, so each Actor's parent is the lowest-index one.
  */
-export function expandFrontier(graph: Graph, search: Search, frontier: Int32Array): Int32Array {
+export function expandFrontier(graph: Links, search: Search, frontier: Int32Array): Int32Array {
   const next: number[] = [];
   for (const actor of frontier) {
     for (const movie of moviesOf(graph, actor)) {
@@ -76,7 +78,7 @@ export function chainTo(parents: Parents, actor: number): IndexChain {
  * Runs a whole search from one Actor: Layer i holds the Actors at Distance i,
  * lowest index first. The last Layer is the farthest one.
  */
-export function searchLayers(graph: Graph, start: number): { search: Search; layers: Int32Array[] } {
+export function searchLayers(graph: Links, start: number): { search: Search; layers: Int32Array[] } {
   const search = startSearch(graph, start);
   const layers: Int32Array[] = [Int32Array.of(start)];
   for (let next = expandFrontier(graph, search, layers[0]!); next.length > 0; next = expandFrontier(graph, search, next)) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadDataset } from "./dataset";
 import type { Dataset } from "./dataset";
-import type { ChainToCenter, ShortestPath } from "../shared/types";
+import type { ChainToCenter, ShortestCycle, ShortestPath } from "../shared/types";
 import { actorsIn, buildGraph } from "./graph";
 import { createOperations, UnknownActorError } from "./operations";
 
@@ -311,29 +311,69 @@ describe("six degrees", () => {
   });
 });
 
-describe("shortestCycle checks (D6 steps 1–2)", () => {
-  it("is not possible for Chosen Actors in different Groups", () => {
-    expect(operations.shortestCycle(["nm01", "nm02", "nm15"])).toEqual({ outcome: "not-possible", reason: "different-groups" });
+/** All Chosen Actors present, the first one first, no Actor repeated, every Link a Movie both Actors are in, and it closes. */
+function expectValidCycle(result: ShortestCycle, chosen: string[]) {
+  if (result.outcome !== "found") throw new Error("expected a Cycle");
+  const ids = result.actors.map((a) => a.id);
+  expect(result.length).toBe(ids.length);
+  expect(ids[0]).toBe(chosen[0]);
+  for (const id of chosen) expect(ids).toContain(id);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(result.movies).toHaveLength(ids.length);
+  result.movies.forEach((movie, i) => {
+    expect(titleOf.get(movie.id)).toBe(movie.title);
+    expect(castOf.get(movie.id)).toContain(ids[i]);
+    expect(castOf.get(movie.id)).toContain(ids[(i + 1) % ids.length]); // closes back to the first
+  });
+}
+
+describe("shortestCycle (D6 checks, then IDA* in a worker)", () => {
+  it("is not possible for Chosen Actors in different Groups", async () => {
+    expect(await operations.shortestCycle(["nm01", "nm02", "nm15"])).toEqual({ outcome: "not-possible", reason: "different-groups" });
   });
 
-  it("is not possible through the tiny dataset's cut actor, and names Dev Ennis", () => {
-    const result = operations.shortestCycle(["nm08", "nm05", "nm02"]);
+  it("is not possible through the tiny dataset's cut actor, and names Dev Ennis", async () => {
+    const result = await operations.shortestCycle(["nm08", "nm05", "nm02"]);
     expect(result).toMatchObject({ outcome: "not-possible", reason: "cut-actor" });
     if (result.outcome !== "not-possible" || result.reason !== "cut-actor") throw new Error("expected a cut actor");
     expect(result.cutActor.id).toBe("nm05");
     expect(result.between.map((a) => a.id)).toEqual(["nm08", "nm02"]);
   });
 
-  it("passes the checks for Actors joined only through one Movie with 3+ Actors (a Movie is never a cut point)", () => {
-    expect(operations.shortestCycle(["nm09", "nm10", "nm11"])).toEqual({ outcome: "shares-block" });
+  it("finds Tom, Uma, Sam Lee 1970 at length 3, every Link from the one Movie they share (paper answer)", async () => {
+    const result = await operations.shortestCycle(["nm09", "nm10", "nm11"]);
+    expectValidCycle(result, ["nm09", "nm10", "nm11"]);
+    expect(result).toMatchObject({ outcome: "found", length: 3 });
+    if (result.outcome !== "found") throw new Error("expected a Cycle");
+    expect(result.movies.map((m) => m.title)).toEqual(["Heat, Again", "Heat, Again", "Heat, Again"]);
   });
 
-  it("passes the checks for the k = 6 ring and for Kevin Bacon, Sid Moss, Xia Ortiz", () => {
-    expect(operations.shortestCycle(["nm02", "nm03", "nm04", "nm05", "nm06", "nm07"])).toEqual({ outcome: "shares-block" });
-    expect(operations.shortestCycle(["nm01", "nm12", "nm14"])).toEqual({ outcome: "shares-block" });
+  it("finds Kevin Bacon, Sid Moss, Xia Ortiz at length 4, never leaving their block (paper answer)", async () => {
+    const result = await operations.shortestCycle(["nm01", "nm12", "nm14"]);
+    expectValidCycle(result, ["nm01", "nm12", "nm14"]);
+    // Ada Hart is Kevin's lowest-id co-star but outside the block (Open Road is a bridge), so she is never tried.
+    expect(result).toMatchObject({ outcome: "found", length: 4, rejected: [], moreRejected: 0 });
+    if (result.outcome !== "found") throw new Error("expected a Cycle");
+    expect(result.actors.map((a) => a.id)).toEqual(["nm01", "nm12", "nm14", "nm13"]);
   });
 
-  it("rejects an unknown Actor", () => {
-    expect(() => operations.shortestCycle(["nm01", "nm02", "nm99"])).toThrow(UnknownActorError);
+  it("finds the k = 6 ring at length 6 (paper answer)", async () => {
+    const ring = ["nm02", "nm03", "nm04", "nm05", "nm06", "nm07"];
+    const result = await operations.shortestCycle(ring);
+    expectValidCycle(result, ring);
+    expect(result).toMatchObject({ outcome: "found", length: 6 });
+    if (result.outcome !== "found") throw new Error("expected a Cycle");
+    expect(result.actors.map((a) => a.id)).toEqual(ring);
+  });
+
+  it("is not possible when the Actors share a block but no Cycle exists (K₂,₃)", async () => {
+    // c0, c1, c2 are each linked only to the hubs h0 and h1.
+    const casts = ["c0", "c1", "c2"].flatMap((c) => [[c, "h0"], [c, "h1"]]);
+    const other = createOperations(buildGraph(datasetOf(["c0", "c1", "c2", "h0", "h1"], casts)));
+    expect(await other.shortestCycle(["c0", "c1", "c2"])).toMatchObject({ outcome: "not-possible", reason: "no-cycle", moreRejected: 0 });
+  });
+
+  it("rejects an unknown Actor", async () => {
+    await expect(operations.shortestCycle(["nm01", "nm02", "nm99"])).rejects.toThrow(UnknownActorError);
   });
 });

@@ -1,13 +1,22 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
-import type { ActorSummary, CycleCheck } from "../shared/types";
+import type { ActorSummary, ShortestCycle } from "../shared/types";
 import { createCyclePanel } from "./cyclePanel";
 
 const names = ["Ada Hart", "Ben Cole", "Cara Diaz", "Dev Ennis", "Eve Ford", "Finn Gray", "Pia Holt"];
 const actors: ActorSummary[] = names.map((name, i) => ({ id: `nm${i}`, name, birthYear: 1970 + i }));
-const [ada, , , dev, , , pia] = actors;
+const [ada, ben, cara, dev, , , pia] = actors;
+const heat = { id: "tt1", title: "Heat" };
+const found: ShortestCycle = {
+  outcome: "found",
+  length: 3,
+  actors: [ada!, ben!, cara!],
+  movies: [heat, heat, heat],
+  rejected: [],
+  moreRejected: 0,
+};
 
-function setup(check: CycleCheck | Error) {
+function setup(check: ShortestCycle | Error | Promise<ShortestCycle>) {
   const search = vi.fn(async (query: string) => actors.filter((a) => a.name.toLowerCase().startsWith(query)));
   const findCycle = vi.fn(async (_ids: string[]) => {
     if (check instanceof Error) throw check;
@@ -32,14 +41,14 @@ function setup(check: CycleCheck | Error) {
   const result = () => panel.querySelector(".result")!;
   const enter = async () => {
     button("[enter]").click();
-    await vi.waitFor(() => expect(result().textContent).not.toBe(""));
+    await vi.waitFor(() => expect(result().textContent).not.toMatch(/^$|^searching…$/));
   };
   return { inputs, options, type, pick, button, result, enter, findCycle };
 }
 
 describe("shortest cycle panel", () => {
   it("starts with 3 actor fields and adds one per [add actor], up to 6", () => {
-    const { inputs, button } = setup({ outcome: "shares-block" });
+    const { inputs, button } = setup(found);
     expect(inputs()).toHaveLength(3);
     for (let i = 0; i < 5; i++) button("[add actor]").click();
     expect(inputs()).toHaveLength(6);
@@ -47,7 +56,7 @@ describe("shortest cycle panel", () => {
   });
 
   it("does not suggest an Actor already picked in another field", async () => {
-    const { pick, type, options } = setup({ outcome: "shares-block" });
+    const { pick, type, options } = setup(found);
     await pick(0, "ada");
     await type(1, "ada");
     expect(options()).toEqual([]);
@@ -56,7 +65,7 @@ describe("shortest cycle panel", () => {
   });
 
   it("does nothing until every field has an Actor", async () => {
-    const { pick, button, result, findCycle } = setup({ outcome: "shares-block" });
+    const { pick, button, result, findCycle } = setup(found);
     await pick(0, "ada");
     await pick(1, "ben");
     button("[enter]").click();
@@ -85,8 +94,8 @@ describe("shortest cycle panel", () => {
     expect(result().classList.contains("not-possible")).toBe(true);
   });
 
-  it("says the Actors share a block when the checks pass, sending every added field", async () => {
-    const { pick, button, enter, result, findCycle } = setup({ outcome: "shares-block" });
+  it("shows the Cycle with the Movie for each Link, closing back to the first Actor, sending every added field", async () => {
+    const { pick, button, enter, result, findCycle } = setup(found);
     button("[add actor]").click();
     await pick(0, "ada");
     await pick(1, "ben");
@@ -94,8 +103,30 @@ describe("shortest cycle panel", () => {
     await pick(3, "dev");
     await enter();
     expect(findCycle).toHaveBeenCalledWith(["nm0", "nm1", "nm2", "nm3"]);
-    expect(result().textContent).toBe("these actors share a block, so a cycle may exist");
+    expect(result().textContent).toBe("length 3: Ada Hart — Heat — Ben Cole — Heat — Cara Diaz — Heat — Ada Hart");
     expect(result().classList.contains("not-possible")).toBe(false);
+  });
+
+  it("shows searching… while the search runs", async () => {
+    let answer: (cycle: ShortestCycle) => void = () => {};
+    const { pick, button, result } = setup(new Promise((resolve) => (answer = resolve)));
+    await pick(0, "ada");
+    await pick(1, "ben");
+    await pick(2, "cara");
+    button("[enter]").click();
+    expect(result().textContent).toBe("searching…");
+    answer(found);
+    await vi.waitFor(() => expect(result().textContent).toMatch(/^length 3/));
+  });
+
+  it("says no cycle exists, fully red, when the search runs out", async () => {
+    const { pick, enter, result } = setup({ outcome: "not-possible", reason: "no-cycle", rejected: [], moreRejected: 0 });
+    await pick(0, "ada");
+    await pick(1, "ben");
+    await pick(2, "cara");
+    await enter();
+    expect(result().textContent).toBe("not possible: no cycle through all of them exists without repeating an actor");
+    expect(result().classList.contains("not-possible")).toBe(true);
   });
 
   it("says the search failed, in plain ink, when the request fails", async () => {

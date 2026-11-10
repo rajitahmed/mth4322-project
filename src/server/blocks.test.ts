@@ -1,36 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { cutActorBetween, findBlocks, sharedBlock } from "./blocks";
-import { actorsIn, buildGraph, type Graph, moviesOf } from "./graph";
+import { buildGraph, type Graph } from "./graph";
 import { loadDataset } from "./dataset";
-
-/** A graph from Movie casts given as lists of Actor indices. */
-function graphOf(actorCount: number, casts: number[][]): Graph {
-  return buildGraph({
-    actors: Array.from({ length: actorCount }, (_, i) => ({ id: `nm${i}`, name: `${i}`, birthYear: null })),
-    movies: casts.map((_, m) => ({ id: `tt${m}`, title: `${m}`, year: null, rating: 7, votes: 2000 })),
-    credits: casts.flatMap((cast, m) => cast.map((a) => ({ movieId: `tt${m}`, actorId: `nm${a}` }))),
-  });
-}
-
-/** Seeded random casts of 1–4 Actors, so some Actors have one co-star and some Groups are tiny. */
-function randomGraph(seed: number, actors: number, movies: number): Graph {
-  let state = seed;
-  const random = (n: number) => {
-    state = (state * 1103515245 + 12345) % 2147483648;
-    return state % n;
-  };
-  return graphOf(
-    actors,
-    Array.from({ length: movies }, () => [...new Set(Array.from({ length: 1 + random(4) }, () => random(actors)))]),
-  );
-}
-
-/** The Actors linked to `a`. */
-function coStars(graph: Graph, a: number): Set<number> {
-  const result = new Set<number>();
-  for (const m of moviesOf(graph, a)) for (const b of actorsIn(graph, m)) if (b !== a) result.add(b);
-  return result;
-}
+import { coStars, graphOf, randomGraph } from "./testGraphs";
 
 /** Whether a reaches b in the actor graph without passing through `removed`. */
 function connectedWithout(graph: Graph, a: number, b: number, removed: number): boolean {

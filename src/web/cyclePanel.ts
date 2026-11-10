@@ -1,19 +1,25 @@
-import { type CycleCheck, MAX_CHOSEN_ACTORS, MIN_CHOSEN_ACTORS } from "../shared/types";
+import { MAX_CHOSEN_ACTORS, MIN_CHOSEN_ACTORS, type ShortestCycle } from "../shared/types";
 import { type ActorField, createActorField, type SearchActors } from "./actorField";
 import { button } from "./button";
+import { chainText } from "./chainText";
 
-export type FindCycle = (ids: string[]) => Promise<CycleCheck>;
+export type FindCycle = (ids: string[]) => Promise<ShortestCycle>;
 
-/** The result line: why no Cycle is possible, or that the Chosen Actors share a block. */
-export function cycleLine(check: CycleCheck): string {
-  if (check.outcome === "shares-block") return "these actors share a block, so a cycle may exist";
-  if (check.reason === "different-groups") return "not possible: these actors share no chain of movies";
-  const [from, to] = check.between;
-  return `not possible: every route from ${from.name} to ${to.name} passes through ${check.cutActor.name}`;
+/** The result line: the Cycle's length and every Link with its Movie, back to the first Actor, or why there is none. */
+export function cycleLine(cycle: ShortestCycle): string {
+  if (cycle.outcome === "found") {
+    const { length, actors, movies } = cycle;
+    return `length ${length}: ${chainText({ distance: length, actors: [...actors, actors[0]!], movies })}`;
+  }
+  if (cycle.reason === "different-groups") return "not possible: these actors share no chain of movies";
+  if (cycle.reason === "no-cycle") return "not possible: no cycle through all of them exists without repeating an actor";
+  const [from, to] = cycle.between;
+  return `not possible: every route from ${from.name} to ${to.name} passes through ${cycle.cutActor.name}`;
 }
 
 /**
- * Tab 2: 3 actor fields, `[add actor]` up to 6, `[enter]`, and the result line.
+ * Tab 2: 3 actor fields, `[add actor]` up to 6, `[enter]`, and the result line
+ * (`searching…` while the search runs: it has no time limit).
  * A field never suggests an Actor already picked in another, so the Chosen
  * Actors are always distinct.
  */
@@ -47,9 +53,11 @@ export function createCyclePanel(searchActors: SearchActors, findCycle: FindCycl
   enter.addEventListener("click", async () => {
     const chosen = actorFields.map((field) => field.selected());
     if (chosen.some((actor) => actor === null)) return;
-    const check = await findCycle(chosen.map((actor) => actor!.id)).catch(() => null);
-    result.textContent = check ? cycleLine(check) : "search failed, try again";
-    result.classList.toggle("not-possible", check?.outcome === "not-possible");
+    result.textContent = "searching…";
+    result.classList.remove("not-possible");
+    const cycle = await findCycle(chosen.map((actor) => actor!.id)).catch(() => null);
+    result.textContent = cycle ? cycleLine(cycle) : "search failed, try again";
+    result.classList.toggle("not-possible", cycle?.outcome === "not-possible");
   });
   return element;
 }

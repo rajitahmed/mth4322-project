@@ -2,9 +2,9 @@ import type {
   ActorSummary,
   ChainMode,
   ChainToCenter,
-  CycleCheck,
   FoundPath,
   LayerSummary,
+  ShortestCycle,
   ShortestPath,
 } from "../shared/types";
 
@@ -42,8 +42,8 @@ export async function findChainToCenter(center: string, actor: string, mode: Cha
   return response.json();
 }
 
-/** The checks before a Cycle search for 3 to 6 distinct Chosen Actors. */
-export async function findCycle(ids: string[]): Promise<CycleCheck> {
+/** The shortest Cycle through 3 to 6 distinct Chosen Actors, or why there is none. No time limit (D9). */
+export async function findCycle(ids: string[]): Promise<ShortestCycle> {
   const response = await fetch(`/api/cycle?${ids.map((id) => `actors=${encodeURIComponent(id)}`).join("&")}`);
   if (!response.ok) throw new Error(`Cycle failed: ${response.status}`);
   return response.json();
