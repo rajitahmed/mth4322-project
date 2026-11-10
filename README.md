@@ -13,7 +13,7 @@ npm start       # server on http://localhost:3000, serving the API and dist/web
 
 For development, run `npm run dev:server` and `npm run dev:web` side by side, then open the Vite URL (it forwards `/api` to the server).
 
-`DATA_DIR` picks the folder with `movies.csv`, `actors.csv` and `credits.csv` (default: `data/tiny`). `PORT` sets the port.
+`DATA_DIR` picks the folder with `movies.csv`, `actors.csv` and `credits.csv` (default: `data/imdb`, the real data; set it to `data/tiny` for a server that starts at once). `PORT` sets the port.
 
 ## Data
 
@@ -21,7 +21,7 @@ The app reads three CSV files. `data/tiny` holds a small hand-made dataset for t
 
 ```sh
 npm run build
-DATA_DIR=data/imdb npm start   # ready after ~16 s; peak memory 440–470 MB, ~130 MB after startup (DECISIONS D26)
+npm start   # ready after ~16 s; peak memory 440–470 MB, ~130 MB after startup (DECISIONS D26)
 ```
 
 The real data comes from the [IMDb non-commercial datasets](https://developer.imdb.com/non-commercial-datasets), filtered by an offline script that you run on your own computer (not on the server). Run it again only to refresh the data:

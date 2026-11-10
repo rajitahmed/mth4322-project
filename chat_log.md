@@ -803,3 +803,12 @@ A chronological log of how this application is being built. There is one entry p
   - Flagged to the user: tab 2 has not been clicked through in Chrome; the headroom under 512 MB is thin (~45 MB); the log line is a small addition the ticket did not ask for.
 - **Verified:** `npm run typecheck` is clean, `npm test` passes, and `npm run build` is OK.
 - **Committed** to `main`.
+
+## 2026-11-10: Real data is the default dataset
+
+- **Asked:** whether `DATA_DIR` must be set to run the real data, and whether hosting needs it. Then: make `data/imdb` the default and commit. The user had already changed `src/server/main.ts`.
+- **Answered:** no. `DATA_DIR` only picks the folder `main.ts` loads, and the tests load `data/tiny` directly, so the default can change safely. With `data/imdb` as the default, `npm start` runs the real site locally and on Render (#14) with no setting. `DATA_DIR` stays as an optional override, for example `data/tiny` for a dev server that starts at once.
+- **Done:**
+  - Committed the user's one-line change, `process.env.DATA_DIR ?? "data/imdb"`.
+  - Updated the README: the default is `data/imdb` and the run command is plain `npm start`.
+  - Left the unrelated `package-lock.json` change uncommitted.

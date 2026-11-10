@@ -5,7 +5,7 @@ import { loadDataset } from "./dataset";
 import { buildGraph } from "./graph";
 import { createOperations } from "./operations";
 
-const dataDir = process.env.DATA_DIR ?? "data/tiny";
+const dataDir = process.env.DATA_DIR ?? "data/imdb";
 const port = Number(process.env.PORT ?? 3000);
 const webDir = resolve("dist/web");
 
