@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ActorSummary, ExploredLink, FoundPath, ShortestPath } from "../shared/types";
 import { createPathPanel } from "./pathPanel";
-import type { Scene, Stage } from "./stage/stage";
+import { endInks, fakeStage } from "./stage/fakeStage";
 
 const kevin: ActorSummary = { id: "nm01", name: "Kevin Bacon", birthYear: 1958 };
 const ben: ActorSummary = { id: "nm03", name: "Ben Cole", birthYear: 1965 };
@@ -31,24 +31,6 @@ const noPath: ShortestPath = {
     { from: "nm17", movie: "tt07", to: "nm18", side: "b" },
   ] satisfies ExploredLink[],
 };
-
-/** A stage that plays nothing: each scene stays "playing" until the test calls `finish`. */
-function fakeStage() {
-  const scenes: Scene[] = [];
-  let onPlaying: (playing: boolean) => void = () => {};
-  const stage: Stage = {
-    element: document.createElement("section"),
-    play(scene, listener) {
-      scenes.push(scene);
-      onPlaying = listener;
-      listener(true);
-    },
-  };
-  return { stage, scenes, finish: () => onPlaying(false) };
-}
-
-/** The colors on a scene's last frame. */
-const endInks = (scene: Scene) => new Set(scene.frame(scene.duration, 80, 25).inks);
 
 const sevenLinks: FoundPath = {
   found: true,

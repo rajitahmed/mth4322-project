@@ -3,6 +3,15 @@
 /** A design.md color token. Green, red and spark only ever mean the answer, rejected, and sparkles. */
 export type Ink = "ink" | "ink-dim" | "accent" | "green" | "red" | "spark";
 
+/** A cell's place on the grid. */
+export interface Cell {
+  x: number;
+  y: number;
+}
+
+/** A cell is about twice as tall as it is wide (16px font: ~9.6px wide, 19px tall), so a round shape spans twice as many columns as rows. */
+export const CELL_ASPECT = 2;
+
 export interface Grid {
   width: number;
   height: number;

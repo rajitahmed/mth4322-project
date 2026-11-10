@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ActorSummary, ShortestCycle } from "../shared/types";
 import { createCyclePanel } from "./cyclePanel";
+import { endInks, fakeStage } from "./stage/fakeStage";
 
 const names = ["Ada Hart", "Ben Cole", "Cara Diaz", "Dev Ennis", "Eve Ford", "Finn Gray", "Pia Holt"];
 const actors: ActorSummary[] = names.map((name, i) => ({ id: `nm${i}`, name, birthYear: 1970 + i }));
@@ -22,7 +23,8 @@ function setup(check: ShortestCycle | Error | Promise<ShortestCycle>) {
     if (check instanceof Error) throw check;
     return check;
   });
-  const panel = createCyclePanel(search, findCycle);
+  const { stage, scenes, finish } = fakeStage();
+  const panel = createCyclePanel(search, findCycle, stage);
   document.body.replaceChildren(panel);
   const inputs = () => [...panel.querySelectorAll("input")];
   const options = () => [...panel.querySelectorAll('[role="option"]')].map((o) => o.textContent);
@@ -38,12 +40,19 @@ function setup(check: ShortestCycle | Error | Promise<ShortestCycle>) {
     panel.querySelector('[role="option"]')!.dispatchEvent(new MouseEvent("mousedown"));
   };
   const button = (text: string) => [...panel.querySelectorAll("button")].find((b) => b.textContent === text)!;
-  const result = () => panel.querySelector(".result")!;
+  const result = () => panel.querySelector<HTMLElement>(".result")!;
+  /** Presses [enter], waits for the answer, and lets the animation finish. */
   const enter = async () => {
     button("[enter]").click();
     await vi.waitFor(() => expect(result().textContent).not.toMatch(/^$|^searching…$/));
+    finish();
   };
-  return { inputs, options, type, pick, button, result, enter, findCycle };
+  const pickThree = async () => {
+    await pick(0, "ada");
+    await pick(1, "ben");
+    await pick(2, "cara");
+  };
+  return { inputs, options, type, pick, pickThree, button, result, enter, findCycle, scenes, finish };
 }
 
 describe("shortest cycle panel", () => {
@@ -137,5 +146,40 @@ describe("shortest cycle panel", () => {
     await enter();
     expect(result().textContent).toBe("search failed, try again");
     expect(result().classList.contains("not-possible")).toBe(false);
+  });
+
+  it("plays the search on the stage, and shows the result line only once the animation ends", async () => {
+    const { pickThree, button, result, scenes, finish } = setup({ ...found, rejected: [{ from: "nm0", movie: "tt9", to: "nm9" }], moreRejected: 2 });
+    await pickThree();
+    button("[enter]").click();
+    await vi.waitFor(() => expect(scenes).toHaveLength(1));
+    expect(result().hidden).toBe(true);
+    finish();
+    expect(result().hidden).toBe(false);
+    expect(endInks(scenes[0]!).has("green")).toBe(true);
+  });
+
+  const notPossible: ShortestCycle[] = [
+    { outcome: "not-possible", reason: "different-groups" },
+    { outcome: "not-possible", reason: "cut-actor", cutActor: dev!, between: [ada!, cara!] },
+    { outcome: "not-possible", reason: "no-cycle", rejected: [{ from: "nm0", movie: "tt9", to: "nm9" }], moreRejected: 0 },
+  ];
+  for (const cycle of notPossible) {
+    it(`plays a not-possible result fully red (${cycle.outcome === "not-possible" && cycle.reason})`, async () => {
+      const { pickThree, enter, scenes } = setup(cycle);
+      await pickThree();
+      await enter();
+      const inks = endInks(scenes[0]!);
+      expect(inks.has("red")).toBe(true);
+      expect(inks.has("green")).toBe(false);
+    });
+  }
+
+  it("plays nothing when the request fails", async () => {
+    const { pickThree, enter, result, scenes } = setup(new Error("Cycle failed: 500"));
+    await pickThree();
+    await enter();
+    expect(scenes).toHaveLength(0);
+    expect(result().hidden).toBe(false);
   });
 });

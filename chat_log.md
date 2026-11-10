@@ -685,3 +685,38 @@ A chronological log of how this application is being built. There is one entry p
   - running time.
 - **Verified:** `npm run typecheck` is clean. `npm test` runs 185 tests and all pass. `npm run build` is OK.
 - **Committed** to `main`.
+
+## 2026-11-10: Ticket #11 implemented (tab 2 Cycle animation)
+
+- **Asked:** `/implement` ticket #11. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Explored:**
+  - Ticket #11 (`gh issue view 11`).
+  - Tab 1's animation from ticket #10: `stage/`, `linking/`, `pathPanel.ts`.
+  - The Cycle payload: `ShortestCycle` in `shared/types.ts`, `cycleSearch.ts` (rejected branches are from the final IDA* pass, capped at 300).
+  - DECISIONS D8, D20, D21, D23 and design.md § Colors and § Animations.
+- **Decided (recorded as D24):**
+  - Tab 2 gets its own stage and plays a new `cycleScene`, so `[replay]`, `[skip]` and reduced motion come for free.
+  - Layout: the Cycle's Actors (or the Chosen Actors) evenly on a circle, #1 on top, clockwise. Rejected branches' Actors fan out on a larger outer circle around the Actor they branched from.
+  - Timeline: the rejected branches first (ink, then red and dotted, then faded), then the closing Links grow one by one in green until the Cycle closes on Actor #1, then the gold flash and sparkles. Runs 5.0 to 14.3 s.
+  - Every Link gets its own Movie label (so a Movie used twice shows twice), in `--ink`, cut at 19 characters, moved apart when labels would overlap.
+  - "+ N more branches tried" at the bottom left once the rejections have played.
+  - Not possible: the circle of Chosen Actors is drawn red and dotted, plus two red Links through the cut actor for "cut actor". These are not real Links (the payload has none for those two reasons); this is flagged to the user to confirm.
+- **Built (test first):**
+  - `stage/linkMarks.ts`: the marks both tabs share (tried timing, rejected fade, gold flash, sparkles), pulled out of tab 1's scene. Tab 1's tests pass unchanged.
+  - `stage/fakeStage.ts`: the test-only fake stage, now shared by both panel tests.
+  - `cycle/cycleRun.ts`, `cycle/cycleLayout.ts`, `cycle/cycleScene.ts`, each with tests.
+  - `cyclePanel.ts` takes a `Stage`, plays the answer, and hides the result line while it plays. `main.ts` passes `createStage(reducedMotion)`.
+- **Checked by printing frames as text**, then **in Chrome on the real data** (`DATA_DIR=data/imdb`): Bacon, Hanks, Streep sends 51 rejected branches. They spray red from Bacon and Hanks and fade, then the triangle draws green with "Apollo 13", "The Post" and "The River Wild", and the result line appears. The server and the browser tab were closed afterwards.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - Fixed:
+    - an accidental edit to tab 1's `pairKey` (an edit script turned its newline escape into real line breaks), restored;
+    - `ring` renamed `circle`, because CONTEXT.md lists "ring" under _Avoid_;
+    - `Cell` and `CELL_ASPECT` defined once in `stage/charGrid.ts`;
+    - `cycleRunOf` moved into its own file;
+    - labels kept from overlapping on long Cycles and drawn on top of the rejected marks;
+    - the note now waits until the rejections are done;
+    - D24 now says the label color overrides design.md's table for stage labels.
+  - Left as is, with reasons in D24: small repeated shapes between the two scenes, the length of `frame`, and the `[string, string]` pairs.
+  - Kept and flagged: the drawn-in red Links for "different Groups" and "cut actor".
+- **Verified:** `npm run typecheck` is clean. `npm test` runs 211 tests and all pass. `npm run build` is OK.
+- **Committed** to `main`.

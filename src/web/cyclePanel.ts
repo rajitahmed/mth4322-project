@@ -2,6 +2,9 @@ import { MAX_CHOSEN_ACTORS, MIN_CHOSEN_ACTORS, type ShortestCycle } from "../sha
 import { type ActorField, createActorField, type SearchActors } from "./actorField";
 import { button } from "./button";
 import { chainText } from "./chainText";
+import { cycleRunOf } from "./cycle/cycleRun";
+import { cycleScene } from "./cycle/cycleScene";
+import type { Stage } from "./stage/stage";
 
 export type FindCycle = (ids: string[]) => Promise<ShortestCycle>;
 
@@ -18,12 +21,12 @@ export function cycleLine(cycle: ShortestCycle): string {
 }
 
 /**
- * Tab 2: 3 actor fields, `[add actor]` up to 6, `[enter]`, and the result line
- * (`searching…` while the search runs: it has no time limit).
+ * Tab 2: 3 actor fields, `[add actor]` up to 6, `[enter]`, the stage, and the result line
+ * (`searching…` while the search runs: it has no time limit; hidden while the answer plays).
  * A field never suggests an Actor already picked in another, so the Chosen
  * Actors are always distinct.
  */
-export function createCyclePanel(searchActors: SearchActors, findCycle: FindCycle): HTMLElement {
+export function createCyclePanel(searchActors: SearchActors, findCycle: FindCycle, stage: Stage): HTMLElement {
   const element = document.createElement("section");
   const fields = document.createElement("div");
   fields.className = "fields";
@@ -31,7 +34,7 @@ export function createCyclePanel(searchActors: SearchActors, findCycle: FindCycl
   const enter = button("[enter]");
   const result = document.createElement("p");
   result.className = "result";
-  element.append(fields, result);
+  element.append(fields, stage.element, result);
 
   const actorFields: ActorField[] = [];
   const pickedIds = () => new Set(actorFields.map((field) => field.selected()?.id));
@@ -54,10 +57,13 @@ export function createCyclePanel(searchActors: SearchActors, findCycle: FindCycl
     const chosen = actorFields.map((field) => field.selected());
     if (chosen.some((actor) => actor === null)) return;
     result.textContent = "searching…";
+    result.hidden = false;
     result.classList.remove("not-possible");
-    const cycle = await findCycle(chosen.map((actor) => actor!.id)).catch(() => null);
+    const ids = chosen.map((actor) => actor!.id);
+    const cycle = await findCycle(ids).catch(() => null);
     result.textContent = cycle ? cycleLine(cycle) : "search failed, try again";
     result.classList.toggle("not-possible", cycle?.outcome === "not-possible");
+    if (cycle) stage.play(cycleScene(cycleRunOf(cycle, ids)), (playing) => (result.hidden = playing));
   });
   return element;
 }

@@ -15,7 +15,7 @@ void showEnterScreen(document.body, reducedMotion).then(() =>
     title,
     createTabs([
       { name: "largest path", panel: createPathPanel(searchActors, findPath, findLargestPath, createStage(reducedMotion)) },
-      { name: "shortest cycle", panel: createCyclePanel(searchActors, findCycle) },
+      { name: "shortest cycle", panel: createCyclePanel(searchActors, findCycle, createStage(reducedMotion)) },
       { name: "six degrees of bacon", panel: createSixDegreesPanel(searchActors, findLayers, findChainToCenter) },
     ]),
   ),

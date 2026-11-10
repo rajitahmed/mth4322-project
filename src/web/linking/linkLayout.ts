@@ -1,5 +1,6 @@
 /** Where each Actor of a two-sided search sits on the stage's character grid. */
 import type { ExploredLink, SearchSide, ShortestPath } from "../../shared/types";
+import type { Cell } from "../stage/charGrid";
 
 /** A two-sided search to animate: its two end Actors, the Links it tried in order, and the answer chain ([] when not possible). */
 export interface Linking {
@@ -21,10 +22,6 @@ export function linkingOf(path: ShortestPath, picked: [string, string] | null): 
   return { ends: [answer[0]!, answer.at(-1)!], tried: path.explored, answer };
 }
 
-export interface Cell {
-  x: number;
-  y: number;
-}
 
 /** Cells kept free at the stage's edges, so sparkles have room. */
 const MARGIN_X = 2;
