@@ -547,3 +547,46 @@ A chronological log of how this application is being built. There is one entry p
     - Left as is (judgement calls): the index/id type pairs, and reusing `chainText`.
 - **Verified:** `npm run typecheck` is clean. `npm test` runs 136 tests and all pass. `npm run build` is OK.
 - **Committed** to `main`.
+
+## 2026-11-10: Ticket #9 implemented (enter screen: ASCII icosahedron, halftone field, design tokens)
+
+- **Asked:** `/implement` ticket #9. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Explored:**
+  - Ticket #9 and `design.md` (colors, type, enter screen, animations, rendering, do-nots).
+  - The existing `main.ts`, `style.css`, `tabs.ts`, panels and test style.
+  - The existing site was checked against the design rules. Colors were already tokens and labels already lowercase. One breach: `opacity: 0.4` on disabled buttons.
+- **Tests first (TDD), red before code**, in `src/web/enter/`:
+  - `icosahedron.test.ts`: 12 vertices on the unit sphere, 30 equal edges, 20 faces; hidden edges at several angles; a full turn returns to the start.
+  - `charGrid.test.ts`: `-` `|` `/` `\` by slope, dotted lines with `.` `:`, clipping, changed cells only.
+  - `bigText.test.ts`: MOVIE over STATISTICS, centred, equal-width rows, ASCII line characters only.
+  - `halftone.test.ts`: only the `·` `•` `●` ramp, mostly empty, under 3% of cells change per 60 fps frame.
+  - `enterFrame.test.ts`: title in the middle; edges `ink`, hidden edges and dots `ink-dim`, title `accent` on hover; the icosahedron steps at 30 fps; the dissolve ends in pure halftone; the hit test.
+  - `enterScreen.test.ts` (happy-dom, fake timers): reduced motion shows nothing; Enter dissolves, then the screen goes away; the button enters; other keys don't.
+- **Built:**
+  - `icosahedron.ts`, `charGrid.ts`, `bigText.ts`, `halftone.ts`, `enterFrame.ts` (pure), `paintGrid.ts` (canvas, changed cells only) and `enterScreen.ts` (DOM, loop, input, reduced motion).
+  - `main.ts` shows the enter screen, then the header and tabs.
+  - `index.html` loads JetBrains Mono 400/700.
+  - `style.css` has a `--font` token, enter-screen styles, and disabled buttons in `--ink-dim` instead of `opacity`.
+- **Bug found in the dev setup:** in Chrome under `vite`, nothing mounted. The proxy key `"/api"` also matched the module request `/api.ts` and sent it to the backend. Fixed with `"/api/"` in `vite.config.ts`.
+- **Checked in Chrome** (1920×1009):
+  - The icosahedron turns, with MOVIE STATISTICS inside it, over the dot field.
+  - The title turns `--accent` on hover.
+  - A click in a corner does nothing; a click on the icosahedron dissolves it into dots.
+  - Enter shows the tabs after the dissolve; the page uses JetBrains Mono.
+  - 60 frames in 1,000 ms.
+  - Reduced motion is covered by the unit test, not checked in the browser.
+- **Decision recorded: D22.** It covers the geometry construction, the projection and hidden edges, line glyphs, the 30/60 fps split, Bayer halftone (vs. noise and Floyd–Steinberg), the dissolve schedule, the changed-cell redraw, input, the font, and running time.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Spec:**
+    - The criteria are met.
+    - Fixed: the canvas could measure cells in the fallback font before JetBrains Mono loaded. It now waits on `document.fonts.load`.
+    - Fixed: `outline: none` removed the only focus indicator. It is now a dashed `--ink-dim` outline.
+    - Fixed: fractional cell widths could leave seams. Cell edges are now rounded to whole pixels.
+    - Fixed: a lost space in the proxy line.
+    - Left as is: the hit test is the projected disc, not the exact outline; the tabs appear with a cut after the dissolve; Google Fonts falls back to the system monospace offline; Space also enters (native button behaviour).
+  - **Standards:**
+    - No hard violations in the code.
+    - Fixed: `close` → `adjacent`; `12` → `corners.length`; the `Point` type is used and the `as` cast is removed; `composeFrame` writes through `setCell`; the title is centred with `stageLayout`.
+    - Left as is (judgement calls): the FIGlet letters use `)` and `V`; the enter screen has its own animation loop (no stage exists before it); the six-argument `composeFrame`; `rowText` used by tests only.
+- **Verified:** `npm run typecheck` is clean. `npm test` runs 155 tests and all pass. `npm run build` is OK.
+- **Committed** to `main`.

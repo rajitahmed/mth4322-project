@@ -1,4 +1,4 @@
-/* Colors from design.md. */
+/* Design tokens from design.md: the seven colors and the one monospace typeface. */
 :root {
   --bg: #0e1220;
   --ink: #f2e9d8;
@@ -7,6 +7,7 @@
   --green: #5ee6a0;
   --red: #ff6b6b;
   --spark: #ffc857;
+  --font: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
   color-scheme: dark;
 }
 
@@ -15,7 +16,7 @@ body {
   padding: 16px;
   background: var(--bg);
   color: var(--ink);
-  font: 16px/1.4 "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  font: 16px/1.4 var(--font);
 }
 
 header {
@@ -122,11 +123,37 @@ input {
   list-style: none;
 }
 
-.fields button:disabled {
+/* design.md: no opacity fades, so a disabled button is drawn in --ink-dim. */
+.fields button:disabled,
+.fields button:disabled:hover {
   cursor: default;
-  opacity: 0.4;
+  color: var(--ink-dim);
 }
 
-.fields button:disabled:hover {
-  color: inherit;
+.enter-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+}
+
+.enter-screen button {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+}
+
+.enter-screen button:focus-visible {
+  outline: 1px dashed var(--ink-dim);
+  outline-offset: -8px;
+}
+
+.enter-screen.hover button {
+  cursor: pointer;
+}
+
+.enter-screen canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
