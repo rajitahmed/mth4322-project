@@ -215,3 +215,38 @@ A chronological log of how this application is being built. There is one entry p
 - **Proposed:** 13 tickets, each a complete working feature: (1) project setup + tiny dataset + graph + autocomplete; (2) IMDb data script; (3) tab 1 two-actor path; (4) tab 1 largest path; (5) tab 3 Layers; (6) tab 3 best-rated + cache; (7) tab 2 checks; (8) tab 2 IDA*; (9) enter screen; (10) animation engine + tab 1 animation; (11) tab 2 animation; (12) tab 3 rings; (13) real data + Render deploy. The optional explanation page was left out (YAGNI).
 - **User:** Approved. Ticket 1 fits in one session.
 - **Done:** Published GitHub issues #1–#13 with the `ready-for-agent` label, in dependency order, with GitHub's native "blocked by" relationships. Ready to start: #1. After #1: #2, #3, #5, #7, #9 can run in parallel.
+
+---
+
+## 2026-11-10: Ticket #1 implemented (project setup, tiny dataset, graph, autocomplete)
+
+- **Asked:** `/implement` ticket #1. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Read:** issue #1, `CLAUDE.md`, `CONTEXT.md`, ADR 0001, `DECISIONS.md` D1–D12, `brief.md`, `design.md`, and the later tickets (#2, #3, #9, #13), so that the interfaces line up with them.
+- **Set up the project:** Node + Fastify server, a plain TypeScript + Vite web app, and Vitest with happy-dom for the two DOM tests. npm first installed Vitest 3.2.7, which has published security advisories (tinypool, @vitest/mocker), so it was pinned to **4.1.12** (released 2026-10-15, patched). npm 10.9.2 crashed on Vitest 4's optional peer set (an arborist `edgesOut` bug), so that one install was run with npm 11.6.2. Afterwards `npm install` and `npm audit` work on npm 10 and report 0 vulnerabilities.
+- **Tiny dataset (`data/tiny/`):** 17 Actors, 16 Movies, 2 Groups, designed to cover every case in the ticket. Paper answers are in `data/tiny/ANSWERS.md`. The Spec reviewer recomputed all of them by hand and found no errors.
+  - Unique farthest pair: Pia Holt to Xia Ortiz, Distance 7.
+  - Cut actor: Dev Ennis.
+  - Cycle that needs Movie reuse: "Heat, Again" with 3 Actors.
+  - k = 6 Cycle: a ring of six Actors.
+  - Shortest and best-rated chains differ for Xia Ortiz.
+  - Same-name Actors: two Sam Lees, born 1970 and 1988.
+  - Missing birth year: Uma Jones.
+  - Group 2 can't be linked to Kevin Bacon.
+- **Built (tests first, red then green):**
+  - CSV parser (handles quoted fields).
+  - Dataset loader.
+  - CSR helper and the actor–movie graph in `Int32Array`s.
+  - Union-find Group labels.
+  - Autocomplete index.
+  - The operations module `createOperations(graph)`.
+  - The `GET /api/actors?q=&limit=` endpoint.
+  - The web shell: 3 tabs, plus actor fields per tab that accept only an Actor picked from the list and show `Name (birth year)`.
+- **Decisions recorded:**
+  - **D13:** rows in file order define "lowest id"; CSR built by counting sort with sorted rows; Group labels by union-find rather than BFS, which keeps a single BFS in the codebase for ticket #3.
+  - **D14:** autocomplete uses a sorted array of word-start keys with binary search, ranked by Movie count, then name, then row. Alternatives were a linear scan, a trie, and substring matching.
+  - Not algorithmic, so only logged here: data folder from `DATA_DIR` (default `data/tiny` until ticket #13); server serves `dist/web`; colors from `design.md` defined as CSS variables now so ticket #9 reuses them.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Standards:** no hard violations. Fixed: a shared `Csr` type and `row()` helper replaced the duplicated CSR indexing in `graph.ts` and `groups.ts`; both search limits now live in `operations.ts`; Movie counts come from `moviesOf`; ranking ties compare normalized names; a failed search now shows no suggestions instead of an unhandled error (new test). Left as is: the `Actor = ActorSummary` alias (keeps the domain term); `NaN` checks on numbers and blank lines in CSV files (the data script, ticket #2, controls its output).
+  - **Spec:** every acceptance criterion met, every paper answer verified. Minor extras: the `limit` parameter, ranking, and a README with run instructions.
+- **Verified:** `npm run typecheck` clean; `npm test` runs 28 tests and all pass; `npm run build` OK; the real server loaded the tiny CSVs (17 Actors, 16 Movies, 2 Groups) and served `/api/actors` and the page.
+- **Committed** to `main`.

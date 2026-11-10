@@ -206,3 +206,35 @@ Algorithmic decisions for the 3 operations and the data filter, in chronological
   - **Tests** (tiny dataset): correct Layer sets; the can't-be-linked set; chains valid (real Links, each Movie shared by both actors, ends at the Center); an actor whose shortest and best-rated chains differ; an actor who can't be linked.
   - **Animation:** rings appear one Layer at a time with counts. Clicking an actor draws their chain back to the Center in green.
 - **Running time:** O(A + M + C) per new Center, O(1) for a cached one, O(d) per chain lookup. Memory is about 8 × a few MB for the cache.
+
+## D13: Graph storage, numbering and Group labels (all operations)
+
+- **Date:** 2026-11-10
+- **Decisions:**
+  - **Numbering.** Actors and Movies are numbered by their row in `actors.csv` and `movies.csv`. "Lowest id" in every tie rule (D5, D8, D11) means **lowest row number**. The data script (ticket #2) writes rows in id order, so the two agree.
+    - Alternative: sort ids as strings when loading. Rejected because IMDb ids have different lengths (`nm9999999` vs `nm10000000`), so string order is not id order, and file order costs nothing.
+  - **Storage (D1 made concrete).** Two compressed sparse row (CSR) indexes in `Int32Array`s: Actor → Movies and Movie → Actors. Each is built with a **counting sort** of the credits, and every row is then sorted ascending, so a search that walks neighbors in order automatically tries the lowest id first.
+    - Alternative: arrays of arrays (`number[][]`). Rejected: one JavaScript array per node costs far more memory than two flat typed arrays, and the 512 MB limit matters (ADR 0001).
+  - **Group labels use union-find** (disjoint sets with union by size and path halving). For every Movie, each of its Actors is joined to the Movie's first Actor. Groups are then renumbered 0, 1, 2, … in order of their lowest Actor.
+    - Alternative: BFS from every Actor not yet labelled. Also linear and also exact. Union-find was chosen because it needs no queue and no per-search state, and it keeps BFS (which ticket #3 writes once, for every operation) out of the setup code, so there is still exactly one BFS in the codebase.
+- **Running time:**
+  - Building the CSR: O(A + M + C) for the counting sort, plus sorting each row: O(C log d), where d is the largest number of Movies per Actor or Actors per Movie (small: principal cast is at most ~10).
+  - Group labels: O(C · α(A)), where α is the inverse Ackermann function (≤ 4 in practice), so effectively linear. Plus O(A) to renumber.
+  - Space: O(A + M + C) for the CSR, O(A) for union-find and the labels.
+
+## D14: Actor autocomplete uses a sorted word-start index with binary search
+
+- **Date:** 2026-11-10
+- **Decision:**
+  - Every Actor name is **normalized** (lowercase, accents removed, spaces collapsed) and stored once **per word start**: "kevin bacon" and "bacon". Hyphens also start a word ("jean-luc" → "luc").
+  - All keys go into **one sorted array**. A query is normalized the same way, then a **binary search** finds the first key ≥ the query, and a scan forward collects every key that starts with it.
+  - Matches are de-duplicated (an Actor can match through two words) and **ranked** by number of Movies (more first, so the famous Kevin Bacon beats a one-film namesake), then by name, then by row number. The top `limit` (default 10, at most 50) are returned.
+  - Every result has id, name and birth year, so the front end shows same-name Actors apart: "Sam Lee (1970)", "Sam Lee (1988)".
+- **Alternatives considered:**
+  - **Linear scan** of every name on each keystroke: O(A · q). Simple, but it re-reads every name for every keystroke. Fast enough at our size, but the sorted index is barely more code and scales.
+  - **Trie:** the same prefix lookup in O(q), but one object per character costs many times the memory of a sorted string array.
+  - **Substring match anywhere** ("evin" → Kevin): finds more but mostly noise, and needs a scan or a suffix structure. People type the start of a first or last name.
+  - **Ranking by votes or popularity of the Actor's Movies:** better in theory, but Movie count is free from the CSR and already puts well-known Actors first.
+- **Running time:**
+  - Build: O(W log W) string comparisons, where W ≈ 2–3 × A is the number of word starts. Space O(W).
+  - Query: O(q log W) for the binary search, plus O(r · q) to scan the r matching keys, plus O(r log r) to rank them. For a 1-letter query r can be large (thousands), which is still a few milliseconds.
