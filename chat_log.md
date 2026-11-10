@@ -206,3 +206,12 @@ A chronological log of how this application is being built. There is one entry p
 - **Asked:** Turn everything into tickets (`/to-tickets`) and push the current state to GitHub.
 - **Done:** Committed all docs and pushed to `main` on `rajitahmed/mth4322-project` (commit `18c65dd`).
 - **Not done:** `/to-tickets` can only be started by the user, not by Claude. The user needs to type `/to-tickets` at the prompt.
+
+---
+
+## 2026-11-10: Tickets published
+
+- **Asked:** `/to-tickets`. Turn the plan into implementation tickets.
+- **Proposed:** 13 tickets, each a complete working feature: (1) project setup + tiny dataset + graph + autocomplete; (2) IMDb data script; (3) tab 1 two-actor path; (4) tab 1 largest path; (5) tab 3 Layers; (6) tab 3 best-rated + cache; (7) tab 2 checks; (8) tab 2 IDA*; (9) enter screen; (10) animation engine + tab 1 animation; (11) tab 2 animation; (12) tab 3 rings; (13) real data + Render deploy. The optional explanation page was left out (YAGNI).
+- **User:** Approved. Ticket 1 fits in one session.
+- **Done:** Published GitHub issues #1–#13 with the `ready-for-agent` label, in dependency order, with GitHub's native "blocked by" relationships. Ready to start: #1. After #1: #2, #3, #5, #7, #9 can run in parallel.
