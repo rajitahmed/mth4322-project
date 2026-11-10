@@ -41,6 +41,8 @@ export function buildApp(operations: Operations, webDir?: string) {
     async (request) => operations.shortestPath(request.query.a, request.query.b),
   );
 
+  app.get("/api/largest-path", async () => operations.largestPath());
+
   if (webDir) app.register(fastifyStatic, { root: webDir });
   return app;
 }

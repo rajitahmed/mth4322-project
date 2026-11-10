@@ -78,7 +78,7 @@ Algorithmic decisions for the 3 operations and the data filter, in chronological
 
 - **Date:** 2026-11-10
 - **Decisions:**
-  - **The distance is the answer.** The pair of actors and the chain of movies are one example that proves it. Tests check the distance against the paper answer and check that the chain is valid (real Links, the right length, the right endpoints). They do not require a specific pair. Ties go to the lowest actor id so replays are identical. The tiny dataset is built with exactly one farthest pair so it can be explained on paper.
+  - **The distance is the answer.** The pair of actors and the chain of movies are one example that proves it. Tests check the distance against the paper answer and check that the chain is valid (real Links, the right length, the right endpoints). They do not require a specific pair. Ties go to the lowest actor id so replays are identical. (D17 shows how iFUB returns exactly the lowest-id pair.) The tiny dataset is built with exactly one farthest pair so it can be explained on paper.
   - **It runs once, when the server starts**, and the result is kept in memory.
     - Alternatives were computing on the first request (the first user waits) and precomputing in the offline data script (production would never run the code the tests check).
     - Startup keeps one code path for both tests and production.
@@ -88,7 +88,7 @@ Algorithmic decisions for the 3 operations and the data filter, in chronological
     - The alternative was animating iFUB itself. It means dozens of full BFS passes, with huge payloads and a second visual style.
     - The brief requires both searches on tab 1 to "look the same."
     - iFUB is explained by the presenter.
-- **Running time:** Startup adds the iFUB cost (D3). Each request for the database-wide answer adds one bidirectional BFS (D4) to build the animation.
+- **Running time:** Startup adds the iFUB cost (D3). Each request for the database-wide answer adds one bidirectional BFS (D4) to build the animation. (D17: that BFS now also runs once at startup, and requests are served from memory.)
 
 ## D6: What a Cycle is, and the checks run before searching (operation 2)
 
@@ -277,3 +277,28 @@ Algorithmic decisions for the 3 operations and the data filter, in chronological
   - **Errors:** an id not in the data throws `UnknownActorError`; the API's error handler (not the operations module, which knows nothing of HTTP) answers it with 404. A missing id is a 400 from the request schema.
 - **Measured on the real data** (29,705 Movies, 119,458 Actors): five well-known Actors, all ten pairs, take 2–7 ms each and explore 250–680 Links.
 - **Running time:** `expandFrontier` is O(size of the frontier's Actors + their credits + the credits of the Movies newly expanded), plus O(n log n) to sort the n Actors it returns. Over a whole search every credit is looked at at most twice per side, and each Actor is sorted into one frontier once, so the worst case is O(A log A + M + C) time (the log only from sorting frontiers; effectively the O(A + M + C) of D4) and O(A + M) space per side, as in D4. Rebuilding the chain is O(d).
+
+## D17: iFUB in code: Groups by size with a size bound, the lowest-id pair, Links counted as distinct co-stars, and the chain cached (operation 1)
+
+- **Date:** 2026-11-10
+- **Decisions:**
+  - **Groups are searched biggest first, and a Group of n Actors is skipped once n − 1 < the best Distance so far.** No two Actors in a Group of n can be more than n − 1 apart (a shortest chain never repeats an Actor). Groups are sorted by size, so the first Group that fails this test ends the loop: every later one is no bigger. This is still "iFUB on every Group" (D3). A skipped Group provably cannot reach the answer, so the answer stays exact, and a smaller Group whose farthest pair is farther apart still wins (tested). The test is `<`, not `≤`, so a Group that could *tie* is still searched, because a tie might hold a lower-id pair (next point).
+    - Alternative: run iFUB on every Group, as D3 literally says. Also exact, but the real data has **846 Groups**, most with 2–10 Actors, and each search allocates arrays the size of the whole graph. The bound skips about 810 of them for free.
+    - Alternative: a tighter bound per Group (for example, from its Movie count). Rejected (KISS): the size bound already skips nearly every small Group.
+  - **Ties go to the lowest-id pair, exactly (D5, issue #4).** A pair is written lower index first, and pairs compare by their first Actor, then their second. Every full search from x offers one candidate: x and its farthest Actor (the lowest index in its last Layer). The answer is the largest Distance and, on equal Distances, the lowest candidate, across all Groups.
+    - **Why this gives the lowest-id pair overall without extra searches.** When iFUB stops after layer i, lb > 2(i−1), and every pair with both Actors in layers 0 … i−1 is at most 2(i−1) apart. So every pair at the final Distance has at least one Actor x that iFUB searched from. x's candidate is the lowest pair containing x at that Distance, so it is no higher than that pair.
+    - Alternative: "the first pair found" (the first draft). Deterministic, but not the lowest-id pair, and the code review flagged it as not meeting D5. Another alternative was a separate search from every Actor at the final Distance to list all tied pairs. Rejected: it adds searches for no gain, because the argument above already covers every tied pair.
+    - Checked against a BFS from every Actor (lowest-id pair included) on 200 seeded random graphs, plus a dataset where a bigger, higher-id Group ties a smaller, lower-id one.
+  - **"The Actor with the most Links" (the 4-sweep's r₁) counts distinct co-stars**, matching CONTEXT.md's Link (two Actors who share at least one Movie). Two Movies with the same co-star count as one Link. Ties go to the lowest index (= lowest id, D13).
+    - Alternative: count Movies (the CSR row length, free to read). Rejected: an Actor in many two-person Movies would look more central than one in a few big ensemble casts, which is the opposite of what the 4-sweep wants.
+  - **The midpoint** of a chain of d Links is its Actor number ⌊d/2⌋ (counting the start as 0). Frontiers are sorted (D16), so every choice in the 4-sweep is deterministic.
+  - **One BFS still.** The full search is `searchLayers` in `bfs.ts`: it loops `expandFrontier` (D16) to the end and returns each Distance's Actors (Layers, when the start is the Center). iFUB, the tests' baseline, and later Six Degrees use it.
+  - **The chain is cached too.** D5 said each request re-runs bidirectional BFS between the two endpoints. The result is deterministic, so the operations module runs it once, at startup, right after iFUB. The endpoint returns the cached chain and explored Links. Same answer, less work per request.
+  - **Endpoint:** `GET /api/largest-path` takes no parameters. It returns the same shape as the two-actor path (`FoundPath`), so tab 1's result line and animation treat both searches the same way (the brief's "look the same"). The lower-id Actor is the first one in the chain. The tab has a `[largest path]` button before the optional two Actor fields, and the answer appears on the same result line.
+  - **Tests:** the tiny dataset's paper answer (Distance 7, Pia Holt → Xia Ortiz). A star Group (largest Distance 2, more Actors, lower ids) beside a smaller chain Group (largest Distance 4), where the chain wins. The cross-Group tie described above. iFUB matches a BFS from every Actor (Distance and pair) on 200 seeded random graphs.
+- **Measured on the real data** (29,705 Movies, 119,458 Actors, 846 Groups, the largest with 113,778 Actors):
+  - **The answer:** **Distance 12**, Óscar Acúrcio (nm0010352) ↔ Abolfazl Ahankhah (nm0013842). The chain runs Portuguese cinema → Marcello Mastroianni → Greek cinema → Iranian cinema.
+  - **The search:** the 4-sweep alone already reaches 12. Layers from u have sizes 1, 554, 20,900, 59,339, 28,381, 4,180, 346, 77 (e = 7). iFUB searches from every Actor in layers 7 and 6 (423 searches) and stops at i = 6, because 12 > 2·5.
+  - **The cost:** about 430 searches of ~28 ms each, **~14 s at startup** with the chain. The method that searches from every Actor would need ~113,778 searches (about an hour).
+  - **The payload:** the chain's bidirectional BFS explores 4,681 Links, so the response is ~325 KB.
+- **Running time:** as D3: O(k·(A + M + C)) time with k ≈ 430 on the real data, and O(A + M) space per search. Counting Links for r₁ is O(Σ cast sizes over the Group's credits) per Group. Grouping and sorting Groups is O(A + G log G) for G Groups. The size bound and the tie rule add O(1) per search.

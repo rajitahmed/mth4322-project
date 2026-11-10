@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadDataset } from "./dataset";
+import type { Dataset } from "./dataset";
 import type { ShortestPath } from "../shared/types";
 import { actorsIn, buildGraph } from "./graph";
 import { createOperations, UnknownActorError } from "./operations";
@@ -118,5 +119,62 @@ describe("shortestPath", () => {
 
   it("rejects an unknown Actor id", () => {
     expect(() => operations.shortestPath("nm01", "nm99")).toThrow(UnknownActorError);
+  });
+});
+
+/** A Dataset from a list of casts: Movie i has the Actors in casts[i]. Actor ids are listed in order. */
+function datasetOf(actorIds: string[], casts: string[][]): Dataset {
+  return {
+    actors: actorIds.map((id) => ({ id, name: id, birthYear: null })),
+    movies: casts.map((_, i) => ({ id: `tt${i}`, title: `Movie ${i}`, year: null, rating: 7, votes: 2000 })),
+    credits: casts.flatMap((cast, i) => cast.map((actorId) => ({ movieId: `tt${i}`, actorId }))),
+  };
+}
+
+describe("largestPath", () => {
+  it("finds the tiny dataset's single farthest pair, Pia Holt and Xia Ortiz, at Distance 7 (paper answer)", () => {
+    const result = operations.largestPath();
+    expect(result.distance).toBe(7);
+    expect([result.actors[0]!.id, result.actors.at(-1)!.id]).toEqual(["nm08", "nm14"]);
+    expect(result.actors).toHaveLength(8);
+    expect(result.movies).toHaveLength(7);
+    result.movies.forEach((movie, i) => {
+      const cast = Array.from(actorsIn(graph, graph.movies.findIndex((m) => m.id === movie.id)), (a) => graph.actors[a]!.id);
+      expect(cast).toContain(result.actors[i]!.id);
+      expect(cast).toContain(result.actors[i + 1]!.id);
+    });
+  });
+
+  it("returns the explored Links of a bidirectional BFS between the two endpoints", () => {
+    const result = operations.largestPath();
+    const replay = operations.shortestPath(result.actors[0]!.id, result.actors.at(-1)!.id);
+    expect(result.explored.length).toBeGreaterThan(0);
+    expect(result.explored).toEqual(replay.explored);
+  });
+
+  it("ignores pairs in separate Groups, and a smaller Group whose farthest pair is farther apart wins", () => {
+    // Group 1 (lowest ids, 7 Actors): a star around s0, largest Distance 2.
+    // Group 2 (5 Actors): the chain c0 – c1 – c2 – c3 – c4, largest Distance 4.
+    const star = ["s0", "s1", "s2", "s3", "s4", "s5", "s6"];
+    const chain = ["c0", "c1", "c2", "c3", "c4"];
+    const dataset = datasetOf(
+      [...star, ...chain],
+      [...star.slice(1).map((s) => ["s0", s]), ...chain.slice(1).map((c, i) => [chain[i]!, c])],
+    );
+    const result = createOperations(buildGraph(dataset)).largestPath();
+    expect(result.distance).toBe(4);
+    expect([result.actors[0]!.id, result.actors.at(-1)!.id]).toEqual(["c0", "c4"]);
+  });
+
+  it("breaks ties by lowest id, across Groups too", () => {
+    // Both Groups' largest Distance is 3. The x Group (later ids) is bigger, so it is searched first;
+    // the y Group (earliest ids) must still win the tie: y0 – y1 – y2 – y3.
+    const dataset = datasetOf(
+      ["y0", "y1", "y2", "y3", "x0", "x1", "x2", "x3", "x4"],
+      [["x0", "x1"], ["x1", "x2"], ["x2", "x3"], ["x1", "x4"], ["y0", "y1"], ["y1", "y2"], ["y2", "y3"]],
+    );
+    const result = createOperations(buildGraph(dataset)).largestPath();
+    expect(result.distance).toBe(3);
+    expect([result.actors[0]!.id, result.actors.at(-1)!.id]).toEqual(["y0", "y3"]);
   });
 });

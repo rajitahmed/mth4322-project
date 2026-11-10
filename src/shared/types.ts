@@ -23,9 +23,16 @@ export interface ExploredLink {
 }
 
 /**
- * Shortest path between two Actors. The Distance is the answer; the chain is one
+ * A chain between two Actors. The Distance is the answer; the chain is one
  * example: `movies[i]` links `actors[i]` and `actors[i + 1]`.
  */
-export type ShortestPath =
-  | { found: true; distance: number; actors: ActorSummary[]; movies: MovieSummary[]; explored: ExploredLink[] }
-  | { found: false; explored: ExploredLink[] };
+export interface FoundPath {
+  found: true;
+  distance: number;
+  actors: ActorSummary[];
+  movies: MovieSummary[];
+  explored: ExploredLink[];
+}
+
+/** Shortest path between two Actors, or none when they are in different Groups. */
+export type ShortestPath = FoundPath | { found: false; explored: ExploredLink[] };

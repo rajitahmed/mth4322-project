@@ -16,6 +16,13 @@ console.log(
     `from ${dataDir} in ${Math.round(performance.now() - started)} ms`,
 );
 
-const app = buildApp(createOperations(graph), existsSync(webDir) ? webDir : undefined);
+const operationsStarted = performance.now();
+const operations = createOperations(graph);
+console.log(
+  `Largest finite shortest path: Distance ${operations.largestPath().distance}, ` +
+    `computed in ${Math.round(performance.now() - operationsStarted)} ms`,
+);
+
+const app = buildApp(operations, existsSync(webDir) ? webDir : undefined);
 await app.listen({ port, host: "0.0.0.0" });
 console.log(`Listening on http://localhost:${port}`);

@@ -4,7 +4,8 @@ import { loadDataset } from "./dataset";
 import { buildGraph } from "./graph";
 import { createOperations } from "./operations";
 
-const app = buildApp(createOperations(buildGraph(loadDataset("data/tiny"))));
+const operations = createOperations(buildGraph(loadDataset("data/tiny")));
+const app = buildApp(operations);
 
 describe("GET /api/actors", () => {
   it("returns matching Actors with id, name and birth year", async () => {
@@ -45,5 +46,21 @@ describe("GET /api/path", () => {
   it("answers 404 for an unknown Actor and 400 for a missing one", async () => {
     expect((await app.inject({ url: "/api/path?a=nm01&b=nm99" })).statusCode).toBe(404);
     expect((await app.inject({ url: "/api/path?a=nm01" })).statusCode).toBe(400);
+  });
+});
+
+describe("GET /api/largest-path", () => {
+  it("returns the Distance, the two Actors, the chain of Movies and the explored Links", async () => {
+    const response = await app.inject({ url: "/api/largest-path" });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body).toMatchObject({ found: true, distance: 7 });
+    expect([body.actors[0].name, body.actors.at(-1).name]).toEqual(["Pia Holt", "Xia Ortiz"]);
+    expect(body.movies).toHaveLength(7);
+    expect(body.explored.length).toBeGreaterThan(0);
+  });
+
+  it("serves one result, computed once when the operations module is created", () => {
+    expect(operations.largestPath()).toBe(operations.largestPath());
   });
 });

@@ -59,3 +59,16 @@ export function chainTo(search: Search, actor: number): { actors: number[]; movi
   }
   return { actors: actors.reverse(), movies: movies.reverse() };
 }
+
+/**
+ * Runs a whole search from one Actor: Layer i holds the Actors at Distance i,
+ * lowest index first. The last Layer is the farthest one.
+ */
+export function searchLayers(graph: Graph, start: number): { search: Search; layers: Int32Array[] } {
+  const search = startSearch(graph, start);
+  const layers: Int32Array[] = [Int32Array.of(start)];
+  for (let next = expandFrontier(graph, search, layers[0]!); next.length > 0; next = expandFrontier(graph, search, next)) {
+    layers.push(next);
+  }
+  return { search, layers };
+}

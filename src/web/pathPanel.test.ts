@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
-import type { ActorSummary, ShortestPath } from "../shared/types";
+import type { ActorSummary, FoundPath, ShortestPath } from "../shared/types";
 import { createPathPanel } from "./pathPanel";
 
 const kevin: ActorSummary = { id: "nm01", name: "Kevin Bacon", birthYear: 1958 };
@@ -19,13 +19,30 @@ const twoLinks: ShortestPath = {
   explored: [],
 };
 
-function setup(path: ShortestPath | Error) {
+const sevenLinks: FoundPath = {
+  found: true,
+  distance: 7,
+  actors: ["Pia Holt", "Dev Ennis", "Cara Diaz", "Ben Cole", "Ada Hart", "Kevin Bacon", "Sid Moss", "Xia Ortiz"].map(
+    (name, i) => ({ id: `nm${i}`, name, birthYear: null }),
+  ),
+  movies: ["Lone Star", "Ring Three", "Ring Two", "Ring One", "Open Road", "Low Tide", "Low Tide 2"].map((title, i) => ({
+    id: `tt${i}`,
+    title,
+  })),
+  explored: [],
+};
+
+function setup(path: ShortestPath | Error, largest: FoundPath | Error = sevenLinks) {
   const search = vi.fn(async (query: string) => actors.filter((a) => a.name.toLowerCase().startsWith(query)));
   const findPath = vi.fn(async (_a: string, _b: string) => {
     if (path instanceof Error) throw path;
     return path;
   });
-  const panel = createPathPanel(search, findPath);
+  const findLargestPath = vi.fn(async () => {
+    if (largest instanceof Error) throw largest;
+    return largest;
+  });
+  const panel = createPathPanel(search, findPath, findLargestPath);
   document.body.replaceChildren(panel);
   const inputs = [...panel.querySelectorAll("input")];
   const pick = async (field: number, text: string) => {
@@ -34,12 +51,14 @@ function setup(path: ShortestPath | Error) {
     await vi.waitFor(() => expect(panel.querySelector('[role="option"]')).not.toBeNull());
     panel.querySelector('[role="option"]')!.dispatchEvent(new MouseEvent("mousedown"));
   };
-  const enter = async () => {
-    panel.querySelector<HTMLButtonElement>("button")!.click();
+  const button = (text: string) => [...panel.querySelectorAll("button")].find((b) => b.textContent === text)!;
+  const press = async (text: string) => {
+    button(text).click();
     await vi.waitFor(() => expect(result().textContent).not.toBe(""));
   };
+  const enter = () => press("[enter]");
   const result = () => panel.querySelector(".result")!;
-  return { pick, enter, result, findPath };
+  return { pick, enter, press, button, result, findPath, findLargestPath };
 }
 
 describe("largest path panel", () => {
@@ -72,10 +91,27 @@ describe("largest path panel", () => {
   });
 
   it("does nothing until both Actors are picked", async () => {
-    const { pick, result, findPath } = setup(twoLinks);
+    const { pick, button, result, findPath } = setup(twoLinks);
     await pick(0, "kevin");
-    document.querySelector("button")!.click();
+    button("[enter]").click();
     expect(findPath).not.toHaveBeenCalled();
     expect(result().textContent).toBe("");
+  });
+
+  it("shows the largest finite shortest path with no Actor fields filled in", async () => {
+    const { press, result, findLargestPath, findPath } = setup(twoLinks);
+    await press("[largest path]");
+    expect(findLargestPath).toHaveBeenCalledOnce();
+    expect(findPath).not.toHaveBeenCalled();
+    expect(result().textContent).toBe(
+      "distance 7: Pia Holt — Lone Star — Dev Ennis — Ring Three — Cara Diaz — Ring Two — Ben Cole — Ring One — " +
+        "Ada Hart — Open Road — Kevin Bacon — Low Tide — Sid Moss — Low Tide 2 — Xia Ortiz",
+    );
+  });
+
+  it("says the search failed when the largest path request fails", async () => {
+    const { press, result } = setup(twoLinks, new Error("Largest path failed: 500"));
+    await press("[largest path]");
+    expect(result().textContent).toBe("search failed, try again");
   });
 });

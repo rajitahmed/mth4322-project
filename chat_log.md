@@ -299,3 +299,28 @@ A chronological log of how this application is being built. There is one entry p
   - **Spec:** every criterion met and the bidirectional BFS judged correct. Fixed: the panel now shows "search failed, try again" (plain ink, not red, since red means only "not possible") when the request fails; `MovieSummary` trimmed to id and title (year and rating were unused, YAGNI). Left as is: explored Links are the search trees only (D16 explains why); the lowest-id tie test stays, because D13 requires the same pair to always give the same chain.
 - **Verified:** `npm run typecheck` clean; `npm test` 53 tests, all pass; `npm run build` OK.
 - **Committed** to `main`.
+
+---
+
+## 2026-11-10: Ticket #4 implemented (tab 1: largest finite shortest path, iFUB + 4-sweep)
+
+- **Asked:** `/implement` ticket #4. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Read:** issue #4, `DECISIONS.md` D3, D5, D13, D16, `algorithms.md` §3, `data/tiny/ANSWERS.md`, `brief.md` (tab 1), `design.md`, `CONTEXT.md`, and the existing BFS, bidirectional BFS, operations, API and tab 1 code.
+- **Built (tests first, at the operations seam, then the API, then the tab):**
+  - `src/server/bfs.ts`: `searchLayers`, a full search that loops the existing `expandFrontier` to the end and returns each Distance's Actors. BFS is still written once.
+  - `src/server/largestPath.ts`: iFUB with a 4-sweep start. The 4-sweep starts from the Actor with the most Links (distinct co-stars, lowest id on ties), then sweeps a₁ → b₁, takes the midpoint r₂, sweeps a₂ → b₂ and takes the midpoint u. iFUB then searches the layers from u, outermost first, and stops when lb > 2(i−1). Every Group that could still reach the best is searched, biggest first. A Group of n Actors is skipped once n − 1 < best. Ties go to the exact lowest-id pair.
+  - `operations.largestPath()`: computed once when the operations module is created (at server start), together with the bidirectional BFS between the two endpoints (the chain and explored Links for the animation). The result is cached. New shared type `FoundPath`. The id mapping moved into one `pathBetween` helper used by both path operations.
+  - `GET /api/largest-path` returns the cached result. `main.ts` logs the Distance and how long it took at startup.
+  - Tab 1: a `[largest path]` button (no fields to fill in) puts `distance 7: Pia Holt — Lone Star — …` on the same result line as the two-actor search.
+- **Tests:**
+  - Operations: the tiny dataset's paper answer, Distance 7, Pia Holt → Xia Ortiz, with a valid chain. The explored Links equal a bidirectional BFS replay between the endpoints. A smaller chain Group beats a bigger star Group, and pairs across Groups are ignored. Ties go to the lowest id across Groups.
+  - iFUB (Distance and pair) matches a BFS from every Actor on 200 seeded random graphs. Endpoints share a Group at exactly that Distance. A single Actor gives Distance 0.
+  - API: 200 with Distance 7 and the chain, and one result computed once.
+  - Panel: the button shows the full chain, and a failed request shows "search failed".
+- **Real data check:** Distance **12**, Óscar Acúrcio ↔ Abolfazl Ahankhah (Portuguese cinema → Mastroianni → Greek → Iranian cinema). The 4-sweep already finds 12. iFUB checks layers 7 and 6 from u (423 searches) to prove it. About 430 searches, ~14 s at startup, against ~113,778 for the naive method. The response is ~325 KB (4,681 explored Links).
+- **Decision recorded: D17.** It covers the Group order and size bound, the exact lowest-id tie rule and why it needs no extra searches, Links counted as distinct co-stars, the midpoint, `searchLayers`, the chain cached at startup (a change to D5's per-request replay), the endpoint, and the measurements. D5 now points to D17.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Spec:** iFUB was judged correct. One real gap: the first draft kept the *first* pair found at the best Distance, not the lowest-id pair (D5, issue #4). **Fixed** with the exact lowest-id rule (D17). The size skip became `<` instead of `≤` so a Group that could tie is still searched. New tests cover this: a cross-Group tie, and the random-graph check now compares the pair too. Putting the old `≤` back makes both tests fail. Left as is: the startup log (a single line, useful when presenting), and the chain cached at startup instead of per request (recorded in D17).
+  - **Standards:** **Fixed** "diameter" (on CONTEXT.md's avoid list) in code and test names, with `groupDiameter` renamed to `groupLargestPath`. Also fixed "all-sources" wording in the tests, and the confusing `largest`/`largestReplay` names (now `farthestPair`/`farthestChain`; the panel's button is `largestButton`). The two `{ distance: -1, … }` copies became one `NO_PAIR`. D5 now points to D17. Left as is: `searchLayers` uses "Layer" for any start Actor (D16 already does this), `linkCount` passed through to `mostLinked`, the small Dataset builders in two test files (different shapes), and the `[largest path]` button sharing the tab's name (the brief puts the no-input answer on this tab).
+- **Verified:** `npm run typecheck` clean, `npm test` 64 tests all pass, and `npm run build` OK.
+- **Committed** to `main`.
