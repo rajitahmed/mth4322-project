@@ -7,6 +7,7 @@
     "dev:server": "tsx watch src/server/main.ts",
     "dev:web": "vite",
     "build": "vite build",
+    "data": "tsx src/data/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

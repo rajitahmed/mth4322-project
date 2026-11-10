@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv } from "./csv";
+import { formatCsv, parseCsv } from "./csv";
 
 describe("parseCsv", () => {
   it("reads rows keyed by the header", () => {
@@ -22,5 +22,17 @@ describe("parseCsv", () => {
 
   it("rejects a row with the wrong number of fields", () => {
     expect(() => parseCsv("id,name\nnm1\n")).toThrow(/line 2/);
+  });
+});
+
+describe("formatCsv", () => {
+  it("quotes only fields that need it, and parseCsv reads it back", () => {
+    const text = formatCsv(["id", "title"], [["tt1", "Heat, Again"], ["tt2", 'Say "Hi"'], ["tt3", "Plain"]]);
+    expect(text).toBe('id,title\ntt1,"Heat, Again"\ntt2,"Say ""Hi"""\ntt3,Plain\n');
+    expect(parseCsv(text)).toEqual([
+      { id: "tt1", title: "Heat, Again" },
+      { id: "tt2", title: 'Say "Hi"' },
+      { id: "tt3", title: "Plain" },
+    ]);
   });
 });

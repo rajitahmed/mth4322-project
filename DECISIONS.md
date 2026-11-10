@@ -238,3 +238,25 @@ Algorithmic decisions for the 3 operations and the data filter, in chronological
 - **Running time:**
   - Build: O(W log W) string comparisons, where W ≈ 2–3 × A is the number of word starts. Space O(W).
   - Query: O(q log W) for the binary search, plus O(r · q) to scan the r matching keys, plus O(r log r) to rank them. For a 1-letter query r can be large (thousands), which is still a few milliseconds.
+
+## D15: The data filter is a streaming hash join over the four IMDb files (data script)
+
+- **Date:** 2026-11-10
+- **Decision:**
+  - The script reads the four IMDb files **one after another, each once, line by line** from the gzip stream. Each pass keeps a row only if its key was kept by an earlier pass, using a hash set or map:
+    1. `title.ratings`: keep titles rated **≥ 6.1** from **≥ 1,100 votes** (map: title id → rating, votes).
+    2. `title.basics`: keep a title if it is in that map **and** its type is `movie` (a feature film; `tvMovie`, `short`, `video`, `tvEpisode` and the rest are left out). These are the Movies.
+    3. `title.principals`: keep a row if its title is a Movie **and** its category is `actor` or `actress` (directors, writers, `self` and other crew are left out). Each Movie's cast is a set, so an Actor listed twice in one Movie (two roles) gives one credit.
+    4. `name.basics`: keep a person if they are in some kept cast. These are the Actors.
+  - A credit whose Actor has **no row in `name.basics`**, or whose name there is missing (`\N`), is dropped, so every credit names a known Actor and the graph builder (which rejects unknown ids) always loads the output.
+  - The filter order is fixed by the dependencies: ratings are the most selective cheap test, so they go first and shrink the set every later pass must look up.
+  - **Output order:** Movies and Actors are sorted by the **number in their id** (`nm9999999` before `nm10000000`), and credits by Movie, then Actor. This is the "lowest id" order of D13. A plain string sort would get it wrong because IMDb ids have different lengths.
+  - A missing year or birth year (`\N`) is written as an empty field, which the loader reads as "unknown" (`null`).
+- **Alternatives considered:**
+  - **Load every file into memory, then join.** `title.principals` alone has close to 100 million rows (~790 MB compressed); as JavaScript objects that is many GB, far past a laptop's memory. Streaming keeps only the kept rows.
+  - **Import into a database (SQLite, DuckDB) and join with SQL.** Correct and fast, but adds a native dependency and a second language for one script, against ADR 0001 (TypeScript everywhere). The four joins are simple key lookups that a hash set already does in O(1).
+  - **Python with pandas.** The usual tool for this, but again a second language and stack, and pandas also loads whole files into memory.
+  - **Sort-merge join** (sort each file by key, then merge). Needs external sorting of the big files on disk; hash lookups are simpler because the kept side (tens of thousands of Movies) fits easily in memory.
+- **Running time:** let R, B, P, N be the rows of the four files (P dominates, ~10⁸), and M, A, C the kept Movies, Actors and credits.
+  - Time: O(R + B + P + N) for the four passes, each row one O(1) hash lookup; plus O(M log M + A log A + C log d) for sorting the output, where d is the largest cast (≤ ~10). The passes are bound by gunzip and disk speed.
+  - Space: O(R' + M + A + C), where R' is the titles of any type that pass the rating filter (pass 1 cannot yet know the type), plus the kept rows and hash sets; each file is streamed, so only one line of it is in memory at a time.

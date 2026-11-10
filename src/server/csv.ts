@@ -43,3 +43,12 @@ function readRecords(text: string): string[][] {
   if (field !== "" || fields.length > 0) endRecord();
   return records;
 }
+
+/** Formats rows as CSV text (RFC 4180, LF line ends), quoting only fields that need it. */
+export function formatCsv(header: string[], rows: string[][]): string {
+  return [header, ...rows].map((fields) => fields.map(formatField).join(",") + "\n").join("");
+}
+
+function formatField(field: string): string {
+  return /[",\r\n]/.test(field) ? `"${field.replaceAll('"', '""')}"` : field;
+}

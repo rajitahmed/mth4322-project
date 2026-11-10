@@ -250,3 +250,24 @@ A chronological log of how this application is being built. There is one entry p
   - **Spec:** every acceptance criterion met, every paper answer verified. Minor extras: the `limit` parameter, ranking, and a README with run instructions.
 - **Verified:** `npm run typecheck` clean; `npm test` runs 28 tests and all pass; `npm run build` OK; the real server loaded the tiny CSVs (17 Actors, 16 Movies, 2 Groups) and served `/api/actors` and the page.
 - **Committed** to `main`.
+
+---
+
+## 2026-11-10: Ticket #2 implemented (IMDb data script)
+
+- **Asked:** `/implement` ticket #2. Record every decision in `DECISIONS.md` and every AI activity in `chat_log.md`.
+- **Read:** issue #2 (and #13, which later commits the real CSV files), `CLAUDE.md`, `CONTEXT.md`, `DECISIONS.md` D13–D14, the CSV parser, the dataset loader and the graph builder (which rejects credits naming an unknown Actor or Movie).
+- **Built (tests first):**
+  - `src/data/imdbFilter.ts`: `filterImdb(sources)` takes the four IMDb files as streams of lines and returns the Dataset. It runs one streaming pass per file: ratings (≥ 6.1 from ≥ 1,100 votes), then basics (title type `movie`), then principals (`actor`/`actress` of kept Movies, once per Movie), then names. Ids are sorted by their number, as D13 needs.
+  - `formatCsv` in `src/server/csv.ts` and `writeDataset` in `src/server/dataset.ts`, next to the parser and loader, so the file format lives in one place.
+  - `src/data/main.ts`, run with `npm run data`: downloads the four `.tsv.gz` files from `datasets.imdbws.com` into `data/imdb-raw/` (gitignored; a file already there is reused; a download goes to a `.part` file first) and writes `data/imdb/`.
+  - `Movie.year` is now `number | null`, like birth year, because IMDb has undated titles.
+  - README: a "Data" section on how to run the script.
+- **Tests:** each acceptance criterion has its own test: a Movie below 6.1, one under 1,100 votes, a TV movie, short, video and episode, and crew who are not actors (director, writer, `self`). Further tests cover numeric id order (`nm9999999` < `nm10000000`), duplicate roles, credits whose Actor has no name, CSV quoting, and an end-to-end test (filter, write, load, build the graph).
+- **Decision recorded: D15.** The filter is a streaming hash join, one pass per file in dependency order. Alternatives were loading everything into memory (`title.principals` has ~10⁸ rows), SQLite or DuckDB, pandas, and a sort-merge join. Time O(R + B + P + N), space O(R' + M + A + C).
+- **Code review (`/code-review`, two parallel reviewers):**
+  - **Standards:** fixed: `filterImdb` split into one function per pass; `castOf` renamed `actorIdsOf` (CONTEXT.md avoids "cast member"); `optional` renamed `formatOptional`; `!` assertions removed from `main.ts`. Left as is: `writeDataset` stays beside `loadDataset`, so both CSV directions sit in one module; the TSV row reader is separate from the CSV parser because the formats differ (no quoting in IMDb TSV).
+  - **Spec:** every criterion met. Fixed: an Actor whose name is `\N` is now dropped (new test), and the end-to-end test was added for "the output loads with the loader".
+- **Real run:** downloaded the four files (~1.3 GB, about 7 min), then filtered them (about 8 min). Output: **29,705 Movies, 119,458 Actors, 271,435 credits**. `loadDataset` and `buildGraph` load it in 0.9 s and find 846 Groups; Kevin Bacon is `nm0000102`; every Movie has a year, rating ≥ 6.1 and votes ≥ 1,100. The CSV files were **not committed**: ticket #13 does that.
+- **Verified:** `npm run typecheck` clean; `npm test` 37 tests, all pass.
+- **Committed** to `main`.

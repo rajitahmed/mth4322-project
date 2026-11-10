@@ -1,12 +1,12 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ActorSummary } from "../shared/types";
-import { parseCsv } from "./csv";
+import { formatCsv, parseCsv } from "./csv";
 
 export interface Movie {
   id: string;
   title: string;
-  year: number;
+  year: number | null;
   rating: number;
   votes: number;
 }
@@ -32,7 +32,7 @@ export function loadDataset(dir: string): Dataset {
     movies: read("movies.csv").map((r) => ({
       id: r.id!,
       title: r.title!,
-      year: Number(r.year),
+      year: r.year ? Number(r.year) : null,
       rating: Number(r.rating),
       votes: Number(r.votes),
     })),
@@ -43,4 +43,19 @@ export function loadDataset(dir: string): Dataset {
     })),
     credits: read("credits.csv").map((r) => ({ movieId: r.movie_id!, actorId: r.actor_id! })),
   };
+}
+
+/** Writes a Dataset as the three CSV files that loadDataset reads. */
+export function writeDataset(dir: string, { movies, actors, credits }: Dataset): void {
+  mkdirSync(dir, { recursive: true });
+  const write = (file: string, header: string[], rows: string[][]) =>
+    writeFileSync(join(dir, file), formatCsv(header, rows));
+  write("movies.csv", ["id", "title", "year", "rating", "votes"], movies.map((m) =>
+    [m.id, m.title, formatOptional(m.year), String(m.rating), String(m.votes)]));
+  write("actors.csv", ["id", "name", "birth_year"], actors.map((a) => [a.id, a.name, formatOptional(a.birthYear)]));
+  write("credits.csv", ["movie_id", "actor_id"], credits.map((c) => [c.movieId, c.actorId]));
+}
+
+function formatOptional(value: number | null): string {
+  return value === null ? "" : String(value);
 }

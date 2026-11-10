@@ -15,6 +15,17 @@ For development, run `npm run dev:server` and `npm run dev:web` side by side, th
 
 `DATA_DIR` picks the folder with `movies.csv`, `actors.csv` and `credits.csv` (default: `data/tiny`). `PORT` sets the port.
 
+## Data
+
+The app reads three CSV files. `data/tiny` holds a small hand-made dataset for tests. The real data comes from the [IMDb non-commercial datasets](https://developer.imdb.com/non-commercial-datasets), filtered by an offline script that you run on your own computer (not on the server):
+
+```sh
+npm run data       # writes data/imdb/{movies,actors,credits}.csv
+DATA_DIR=data/imdb npm start
+```
+
+The script downloads `title.ratings`, `title.basics`, `title.principals` and `name.basics` (`.tsv.gz`, about 1.3 GB in total) into `data/imdb-raw/`, which git ignores. A file already there is reused, not downloaded again; delete it to fetch a newer copy. It keeps feature films (title type `movie`) rated at least 6.1 from at least 1,100 votes, and the actors and actresses in their principal cast (DECISIONS D15).
+
 ## Test
 
 ```sh
