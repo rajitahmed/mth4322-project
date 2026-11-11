@@ -74,11 +74,13 @@ export function createOperations(graph: Graph) {
     movies: chain.movies.map(movieAt),
   });
 
-  /** The names of these Actor and Movie indices, by id, for an animation. */
-  const namesOf = (actors: Iterable<number>, movies: Iterable<number>): Names => {
+  const linkOf = ({ from, movie, to }: IndexLink): Link => ({ from: actorAt(from).id, movie: movieAt(movie).id, to: actorAt(to).id });
+
+  /** The names of both ends and the Movie of every one of these Links, plus `alsoActors`, by id, for an animation. */
+  const namesOfLinks = (links: IndexLink[], alsoActors: number[] = []): Names => {
     const names: Names = {};
-    for (const a of actors) names[actorAt(a).id] = actorAt(a).name;
-    for (const m of movies) names[movieAt(m).id] = movieAt(m).title;
+    for (const a of [...alsoActors, ...links.flatMap((l) => [l.from, l.to])]) names[actorAt(a).id] = actorAt(a).name;
+    for (const { movie } of links) names[movieAt(movie).id] = movieAt(movie).title;
     return names;
   };
 
@@ -86,15 +88,9 @@ export function createOperations(graph: Graph) {
   const pathBetween = (a: number, b: number): ShortestPath => {
     const result = shortestPath(graph, a, b);
     const rounds = showRounds(result.rounds, [a, b], result.found ? result.actors : []);
-    const shown = rounds.flatMap((round) => round.shown);
     const trace = {
-      rounds: rounds.map(({ side, depth, reached, shown }) => ({
-        side,
-        depth,
-        reached,
-        shown: shown.map(({ from, movie, to }) => ({ from: actorAt(from).id, movie: movieAt(movie).id, to: actorAt(to).id, side })),
-      })),
-      names: namesOf([a, b, ...shown.flatMap((l) => [l.from, l.to])], shown.map((l) => l.movie)),
+      rounds: rounds.map(({ side, depth, reached, shown }) => ({ side, depth, reached, shown: shown.map((link) => ({ ...linkOf(link), side })) })),
+      names: namesOfLinks(rounds.flatMap((round) => round.shown), [a, b]),
     };
     if (!result.found) return { found: false, ...trace };
     return { found: true, ...chainOf(result), ...trace };
@@ -116,7 +112,6 @@ export function createOperations(graph: Graph) {
   const blocks = findBlocks(graph);
   /** Only the Links go to a Cycle worker: the Actor and Movie records stay here. */
   const links = { actorMovies: graph.actorMovies, movieActors: graph.movieActors };
-  const linkOf = ({ from, movie, to }: IndexLink): Link => ({ from: actorAt(from).id, movie: movieAt(movie).id, to: actorAt(to).id });
   const randomPool = graph.actors.flatMap((_, a) => (movieCounts[a]! >= RANDOM_MIN_MOVIES ? [a] : []));
 
   return {
@@ -214,7 +209,7 @@ export function createOperations(graph: Graph) {
       const rejections = {
         rejected: search.rejected.map(linkOf),
         moreRejected: search.moreRejected,
-        names: namesOf(search.rejected.flatMap((l) => [l.from, l.to]), search.rejected.map((l) => l.movie)),
+        names: namesOfLinks(search.rejected),
       };
       if (!search.found) return { outcome: "not-possible", reason: "no-cycle", ...rejections };
       return {

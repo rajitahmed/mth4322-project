@@ -826,3 +826,27 @@ A chronological log of how this application is being built. There is one entry p
   - `design.md` updated for these changes.
 - **Checked:** `npm run typecheck`, `npm test`, `npm run build`; all three tabs clicked through in Chrome on the real data (port 3001, since port 3000 was taken by another running server).
 - **Not done:** `/code-review` was not run (usage limit). A tiny-dataset demo for stepping was not added; stepping works on any run.
+
+## 2026-11-10: Finish the UI work; a see-through landing title
+
+- **Asked:** finish the job (the code review was still open), and make the landing page's MOVIE STATISTICS look less like an opaque button inside the shape: keep it animated, but more transparent.
+- **Decided (D28):**
+  - The title is drawn inside the solid: back edges first, then the title, then the near edges over it.
+  - D27's blank halo is gone, so the halftone shows between the letters.
+  - Letters rest in ink-dim, and a band of ink sweeps across them every 4 seconds. On hover the title is accent.
+- **Checked:** enter-frame tests updated (see-through, moving shine, letters still readable under crossing edges). Seen in Chrome on port 3001.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - Fixed:
+    - one `namesOfLinks` helper for both callers;
+    - a shadowed `shown` in `pathBetween`;
+    - `linkOf` reused for tab 1's links (moved above its first use);
+    - the `Round.depth` comment.
+  - Left, with reasons:
+    - `showRounds` always keeps the answer's Link, but a round reaches at most one answer Actor, so it never shows more than 6.
+    - `randomActors` returns fewer than asked only on a dataset smaller than the count (the route caps it at 6).
+    - The 10-Movie filter on `[random]` is kept (D27).
+  - Flagged to the user:
+    - tab 2's `[random]` picks both the count and the actors in one click, with no separate option;
+    - there is no tiny-dataset mode for stepping;
+    - dim letters on a projector should be checked.
+- **Verified:** `npm run typecheck` clean, `npm test` passes (297), `npm run build` OK.

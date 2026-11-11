@@ -19,7 +19,7 @@ interface Side {
 /** One round of the search: one side reached every Actor one Link further from its end, each by one Link. */
 export interface Round {
   side: SearchSide;
-  /** Links from this side's end to the Actors reached this round. */
+  /** How many Links this side's end is from the Actors reached this round. */
   depth: number;
   links: ExploredLink[];
 }
