@@ -119,7 +119,7 @@ describe("stage", () => {
     const scene = recordingScene();
     stage.play(scene, onPlaying);
     button("[step >]").click();
-    expect(scene.times.at(-1)).toBe(1);
+    expect(scene.times.at(-1)).toBeCloseTo(1.99); // step 2 with its work drawn: just before the end
     expect(button("[play]").hidden).toBe(false);
     await vi.advanceTimersByTimeAsync(3000);
     expect(playing).toEqual([true]); // paused: time stands still
@@ -133,11 +133,28 @@ describe("stage", () => {
     stage.play(scene, onPlaying);
     button("[skip]").click();
     button("[< step]").click();
-    expect(scene.times.at(-1)).toBe(1);
+    expect(scene.times.at(-1)).toBeCloseTo(1.99); // step 2 with its work drawn: just before the end
     expect(playing).toEqual([true, false, true]);
     button("[play]").click();
     await vi.advanceTimersByTimeAsync(1500);
     expect(playing).toEqual([true, false, true, false]);
+  });
+
+  it("in a walkthrough, starts paused on the first step and lists every step, the current one marked", async () => {
+    fakeCanvas();
+    const stage = createStage(false, true);
+    document.body.append(stage.element);
+    const scene = recordingScene();
+    stage.play(scene, () => {});
+    const items = () => [...stage.element.querySelectorAll(".step-list li")];
+    expect(items().map((li) => li.textContent)).toEqual(["first", "second"]);
+    expect(items()[0]!.getAttribute("aria-current")).toBe("step");
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(scene.times.at(-1)).toBe(0); // still paused on step 1
+    items()[1]!.querySelector("button")!.click();
+    expect(scene.times.at(-1)).toBeCloseTo(1.99); // step 2 with its work drawn: just before the end
+    expect(items()[1]!.getAttribute("aria-current")).toBe("step");
+    expect(items()[0]!.hasAttribute("aria-current")).toBe(false);
   });
 
   it("keeps drawing after the end, so the scene's idle motion plays on", async () => {

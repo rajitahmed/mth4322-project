@@ -20,7 +20,7 @@ const CHECK = 1.2;
 /** Seconds per rejected branch, with the whole window kept to MIN–MAX_REJECTING. */
 const PER_REJECTED = 0.03;
 const MIN_REJECTING = 2;
-const MAX_REJECTING = 6;
+const MAX_REJECTING = 5;
 /** Seconds per closing Link, with the whole window kept to MIN–MAX_CLOSING, so a run lasts 5 to 15 seconds. */
 const PER_CLOSING = 0.5;
 const MIN_CLOSING = 3.5;
@@ -50,10 +50,12 @@ export function cycleScene(run: CycleRun): Scene {
   const closing = closingLinks(run);
   /** Different Groups stop after the first check; everything else after the second. */
   const checks = run.outcome === "different-groups" ? CHECK : 2 * CHECK;
+  /** When the search plays: after the checks, and after its own step ("search for the shortest cycle") when there is a search. */
+  const searching = run.outcome === "found" || run.outcome === "no-cycle" ? checks + CHECK : checks;
 
   const rejecting = rejected.length === 0 ? 0 : clamp(rejected.length * PER_REJECTED, MIN_REJECTING, MAX_REJECTING);
-  const triedAt = (i: number) => checks + (i * rejecting) / rejected.length;
-  const closingStart = checks + (rejected.length === 0 ? 0 : rejecting + TRYING);
+  const triedAt = (i: number) => searching + (i * rejecting) / rejected.length;
+  const closingStart = searching + (rejected.length === 0 ? 0 : rejecting + TRYING);
   const slot = clamp(closing.length * PER_CLOSING, MIN_CLOSING, MAX_CLOSING) / closing.length;
   const settled = closingStart + closing.length * slot;
   const duration = settled + FLASH + SPARKLE;
@@ -84,7 +86,7 @@ export function cycleScene(run: CycleRun): Scene {
       const finishInk = answerInk(t, settled);
       const faded = (i: number) => fadeOf(t, triedAt(i), possible);
       /** The off-circle Actor most recently reached by a rejected branch, while the branches play. */
-      const current = rejected.length === 0 || t < checks ? -1 : Math.min(rejected.length - 1, Math.floor(((t - checks) * rejected.length) / rejecting));
+      const current = rejected.length === 0 || t < searching ? -1 : Math.min(rejected.length - 1, Math.floor(((t - searching) * rejected.length) / rejecting));
       const trying = t < closingStart ? rejected[current] : undefined;
       const newest = trying && (circle.includes(trying.to) ? trying.from : trying.to);
 

@@ -850,3 +850,19 @@ A chronological log of how this application is being built. There is one entry p
     - there is no tiny-dataset mode for stepping;
     - dim letters on a projector should be checked.
 - **Verified:** `npm run typecheck` clean, `npm test` passes (297), `npm run build` OK.
+
+## 2026-11-10: Random set sizes and the Algorithms Explained By Claude page
+
+- **Asked:** add both options offered after the last review: a random count choice on tab 2, and a friendly small case to step through for each algorithm, on a separate page linked top right, called "Algorithms Explained By Claude".
+- **Done (D29):**
+  - Tab 2's single `[random]` is now `random: [any] [3] [4] [5] [6]`.
+  - New page `explain.html`, linked as `[algorithms explained by Claude]` in a new top bar. It holds one section per algorithm: an explanation, its running time, and friendly cases on the tiny dataset (Kevin Bacon → Dev Ennis, → Gia Quinn, the largest path; the five paper Cycle cases; Kevin Bacon's layers, Xia Ortiz's two chains, Gia Quinn).
+  - The server serves the tiny dataset under `/api/tiny`. The web API became a factory, `apiAt(base)`.
+  - Walkthrough stages: each case starts paused, with a clickable step list.
+  - Stepping now stops at the end of a step, so each step shows its own work. Every scene gives each step its own moment.
+  - During a round, tab 1 now names the answer's Actors too.
+- **Checked:**
+  - New tests for the explainer page, the `/api/tiny` routes, the walkthrough stage, `stepEnd`, distinct step times in every scene, and the random set sizes.
+  - Clicked through the page in Chrome on port 3001.
+  - The explainer test answers Cycle requests itself: the Cycle worker can't start under happy-dom, and the server's tests cover that route.
+- **Verified:** `npm run typecheck` clean, `npm test` passes, `npm run build` OK.

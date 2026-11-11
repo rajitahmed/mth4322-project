@@ -95,7 +95,7 @@ export function linkingScene(linking: Linking): Scene {
         else if (k >= 0 || !roundOver(link.round)) setCell(grid, x, y, "o", "ink");
         else fadedCell(grid, x, y, "+", faded(link.round));
         // Named while its round is being told.
-        if (link.round === current && searching && k < 0) {
+        if (link.round === current && searching) {
           const side = rounds[link.round]!.side;
           writeLabel(grid, side === "a" ? x + 2 : x - 2, y, name(link.to), "ink", 2 * spacing - 3, side === "a" ? "start" : "end");
         }

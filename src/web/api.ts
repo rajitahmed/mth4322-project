@@ -9,66 +9,43 @@ import type {
   UnlinkedPage,
 } from "../shared/types";
 
-export async function searchActors(query: string): Promise<ActorSummary[]> {
-  const response = await fetch(`/api/actors?q=${encodeURIComponent(query)}`);
-  if (!response.ok) throw new Error(`Actor search failed: ${response.status}`);
+/** GET `url` as JSON; `what` names the request in the error. */
+async function getJson<T>(url: string, what: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${what} failed: ${response.status}`);
   return response.json();
 }
 
-/** `count` distinct random Actors, from those with enough Movies to be known (D27). */
-export async function randomActors(count: number): Promise<ActorSummary[]> {
-  const response = await fetch(`/api/actors/random?count=${count}`);
-  if (!response.ok) throw new Error(`Random actors failed: ${response.status}`);
-  return response.json();
+/** Every call the page makes to the server, against the API at `base`: "/api" (the real data) or "/api/tiny" (D29). */
+export function apiAt(base: string) {
+  const q = encodeURIComponent;
+  return {
+    searchActors: (query: string) => getJson<ActorSummary[]>(`${base}/actors?q=${q(query)}`, "Actor search"),
+
+    /** `count` distinct random Actors, from those with enough Movies to be known (D27). */
+    randomActors: (count: number) => getJson<ActorSummary[]>(`${base}/actors/random?count=${count}`, "Random actors"),
+
+    findPath: (a: string, b: string) => getJson<ShortestPath>(`${base}/path?a=${q(a)}&b=${q(b)}`, "Path search"),
+
+    findLargestPath: () => getJson<FoundPath>(`${base}/largest-path`, "Largest path"),
+
+    /** The Layer counts around a Center; the default Center (Kevin Bacon) when none is given. */
+    findLayers: (center?: string) => getJson<LayerSummary>(`${base}/six-degrees${center === undefined ? "" : `?center=${q(center)}`}`, "Layers"),
+
+    findChain: (center: string, actor: string, mode: ChainMode) =>
+      getJson<ChainToCenter>(`${base}/six-degrees/chain?center=${q(center)}&actor=${q(actor)}&mode=${mode}`, "Chain"),
+
+    /** Who a dot on the rings stands for: the Actor at `position` in Layer `layer` around a Center. */
+    findActorAt: (center: string, layer: number, position: number) =>
+      getJson<ActorSummary>(`${base}/six-degrees/layer-actor?center=${q(center)}&layer=${layer}&position=${position}`, "Layer actor"),
+
+    /** One page of the Actors who can't be linked to a Center, filtered by name. */
+    findUnlinked: (center: string, query: string, offset: number, limit: number) =>
+      getJson<UnlinkedPage>(`${base}/six-degrees/unlinked?center=${q(center)}&q=${q(query)}&offset=${offset}&limit=${limit}`, "Unlinked"),
+
+    /** The shortest Cycle through 3 to 6 distinct Chosen Actors, or why there is none. No time limit (D9). */
+    findCycle: (ids: string[]) => getJson<ShortestCycle>(`${base}/cycle?${ids.map((id) => `actors=${q(id)}`).join("&")}`, "Cycle"),
+  };
 }
 
-export async function findPath(a: string, b: string): Promise<ShortestPath> {
-  const response = await fetch(`/api/path?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
-  if (!response.ok) throw new Error(`Path search failed: ${response.status}`);
-  return response.json();
-}
-
-export async function findLargestPath(): Promise<FoundPath> {
-  const response = await fetch("/api/largest-path");
-  if (!response.ok) throw new Error(`Largest path failed: ${response.status}`);
-  return response.json();
-}
-
-/** The Layer counts around a Center; the default Center (Kevin Bacon) when none is given. */
-export async function findLayers(center?: string): Promise<LayerSummary> {
-  const query = center === undefined ? "" : `?center=${encodeURIComponent(center)}`;
-  const response = await fetch(`/api/six-degrees${query}`);
-  if (!response.ok) throw new Error(`Layers failed: ${response.status}`);
-  return response.json();
-}
-
-export async function findChainToCenter(center: string, actor: string, mode: ChainMode): Promise<ChainToCenter> {
-  const response = await fetch(
-    `/api/six-degrees/chain?center=${encodeURIComponent(center)}&actor=${encodeURIComponent(actor)}&mode=${mode}`,
-  );
-  if (!response.ok) throw new Error(`Chain failed: ${response.status}`);
-  return response.json();
-}
-
-/** Who a dot on the rings stands for: the Actor at `position` in Layer `layer` around a Center. */
-export async function findActorAt(center: string, layer: number, position: number): Promise<ActorSummary> {
-  const response = await fetch(`/api/six-degrees/layer-actor?center=${encodeURIComponent(center)}&layer=${layer}&position=${position}`);
-  if (!response.ok) throw new Error(`Layer actor failed: ${response.status}`);
-  return response.json();
-}
-
-/** One page of the Actors who can't be linked to a Center, filtered by name. */
-export async function findUnlinked(center: string, query: string, offset: number, limit: number): Promise<UnlinkedPage> {
-  const response = await fetch(
-    `/api/six-degrees/unlinked?center=${encodeURIComponent(center)}&q=${encodeURIComponent(query)}&offset=${offset}&limit=${limit}`,
-  );
-  if (!response.ok) throw new Error(`Unlinked failed: ${response.status}`);
-  return response.json();
-}
-
-/** The shortest Cycle through 3 to 6 distinct Chosen Actors, or why there is none. No time limit (D9). */
-export async function findCycle(ids: string[]): Promise<ShortestCycle> {
-  const response = await fetch(`/api/cycle?${ids.map((id) => `actors=${encodeURIComponent(id)}`).join("&")}`);
-  if (!response.ok) throw new Error(`Cycle failed: ${response.status}`);
-  return response.json();
-}
+export type Api = ReturnType<typeof apiAt>;

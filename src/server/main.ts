@@ -23,7 +23,9 @@ console.log(
     `computed in ${elapsedMs(operationsStarted)} ms`,
 );
 
-const app = buildApp(operations, existsSync(webDir) ? webDir : undefined);
+// The tiny dataset backs the explainer page's friendly cases (D29); it loads in milliseconds.
+const tiny = createOperations(buildGraph(loadDataset("data/tiny")));
+const app = buildApp(operations, existsSync(webDir) ? webDir : undefined, tiny);
 await app.listen({ port, host: "0.0.0.0" });
 // maxRSS is in kilobytes; the peak is checked against Render's 512 MB (DECISIONS D26).
 console.log(

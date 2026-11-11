@@ -6,6 +6,8 @@ export interface Step {
 
 /** Steps closer than this (seconds) count as the same moment, so stepping never stalls on a rounding error. */
 const NEAR = 1e-6;
+/** How far before the next step a shown step stops, so its own work is drawn and the next has not begun. */
+const BEFORE_NEXT = 0.01;
 
 /** The index of the step being told at `t`: the last one at or before it; -1 before the first. */
 export function stepIndexAt(steps: Step[], t: number): number {
@@ -16,15 +18,12 @@ export function stepIndexAt(steps: Step[], t: number): number {
   return index;
 }
 
-/** When the step after the one at `t` starts; `end` when there is none. */
-export function nextStepTime(steps: Step[], t: number, end: number): number {
-  return steps.find((step) => step.at > t + NEAR && step.at < end)?.at ?? end;
-}
-
-/** When the step before the one at `t` starts (the run's start before the second step). */
-export function previousStepTime(steps: Step[], t: number): number {
-  const current = stepIndexAt(steps, t);
-  // Just after a step starts, going back means the one before it, as on a music player.
-  const back = current >= 0 && t - steps[current]!.at > 0.5 ? current : current - 1;
-  return back >= 0 ? steps[back]!.at : 0;
+/**
+ * Where stepping to step `i` stops: just before the next step starts, so the picture shows what step i
+ * did (D29). Past the last step, it is the end of the run, `end`.
+ */
+export function stepEnd(steps: Step[], i: number, end: number): number {
+  if (i >= steps.length) return end;
+  const next = steps[i + 1]?.at ?? end;
+  return Math.max(steps[i]!.at, next - BEFORE_NEXT);
 }

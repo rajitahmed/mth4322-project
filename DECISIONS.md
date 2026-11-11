@@ -679,3 +679,18 @@ Algorithmic decisions for the 3 operations and the data filter, in chronological
   - Squeezing the title in time with the spin. Rejected: resampling FIGlet columns drops strokes and the letters jitter.
 - **Why:** depth (front edges cross the letters, back edges pass behind) and see-through letters make the title part of the shape; the moving shine keeps it alive and still marks it as the thing to click.
 - **Running time:** O(cells) per frame, as before.
+
+## D29: Algorithms Explained By Claude: friendly cases on the tiny dataset, served beside the real data, on walkthrough stages (all operations)
+
+- **Date:** 2026-11-10
+- **Decisions:**
+  - **A second page, `explain.html`**, linked from the top bar. It has one section per algorithm: a plain-words explanation, the running time, and buttons for friendly cases. Its text comes from D3, D4, D6, D7, D10 and D11.
+  - **The cases run on the tiny dataset through the real code.** The server builds a second operations module over `data/tiny` at startup and serves the same routes under `/api/tiny`. The web API is a factory, `apiAt(base)`, and both pages use it. The page looks Actors up by name through that API, and reads the dataset's picture from `data/tiny/ANSWERS.md`, so nothing is copied. The cases are the paper answers in ANSWERS.md.
+    - Alternatives considered:
+      - A dataset switch on the main page. Rejected: it mixes a teaching mode into the tabs.
+      - Running the algorithms in the browser. Rejected: it would be a second copy of BFS, IDA* and the DP, against CLAUDE.md's one source of truth.
+      - Canned recordings. Rejected: they could drift from the code.
+  - **Walkthrough stages:** `createStage(reducedMotion, walkthrough)`. A walkthrough run starts paused on step 1, and all steps are listed under the canvas: the current one is marked, and clicking one jumps to it.
+  - **Stepping stops at a step's end, not its start** (`stepEnd`): just before the next step begins, so the picture shows what that step did. Every scene now gives each step its own moment, which a test checks for every scene kind. This needed a 1 s intro in tab 3's scenes and a slot for "search for the shortest cycle" in tab 2.
+  - **Tab 2's random set:** `random: [any] [3] [4] [5] [6]`. `[any]` picks the count; a number picks that many.
+- **Running time:** the tiny dataset adds O(17 + 16 + 33) work and memory at startup, which is negligible. The algorithms are unchanged.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextStepTime, previousStepTime, type Step, stepIndexAt } from "./steps";
+import { type Step, stepEnd, stepIndexAt } from "./steps";
 
 const steps: Step[] = [
   { at: 0, text: "start" },
@@ -16,17 +16,14 @@ describe("steps", () => {
     expect(stepIndexAt([{ at: 1, text: "late" }], 0)).toBe(-1);
   });
 
-  it("steps forward to the next step's start, then to the end", () => {
-    expect(nextStepTime(steps, 0, 6)).toBe(2);
-    expect(nextStepTime(steps, 2, 6)).toBe(4);
-    expect(nextStepTime(steps, 4, 6)).toBe(6);
-    expect(nextStepTime(steps, 6, 6)).toBe(6);
+  it("stops a step just before the next one starts, so its own work is drawn and it is still the step told", () => {
+    expect(stepEnd(steps, 0, 6)).toBeCloseTo(1.99);
+    expect(stepIndexAt(steps, stepEnd(steps, 0, 6))).toBe(0);
+    expect(stepEnd(steps, 2, 6)).toBeCloseTo(5.99);
+    expect(stepEnd(steps, 3, 6)).toBe(6);
   });
 
-  it("steps back to the current step's start, or the one before when just past it", () => {
-    expect(previousStepTime(steps, 3)).toBe(2);
-    expect(previousStepTime(steps, 2)).toBe(0);
-    expect(previousStepTime(steps, 4.2)).toBe(2);
-    expect(previousStepTime(steps, 0)).toBe(0);
+  it("never stops a step before it starts", () => {
+    expect(stepEnd([{ at: 1, text: "a" }, { at: 1, text: "b" }], 0, 5)).toBe(1);
   });
 });

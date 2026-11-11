@@ -335,3 +335,83 @@ input {
 .stage-controls button:hover {
   color: var(--accent);
 }
+
+/* The top bar: MOVIE STATISTICS on the left, the link to the other page on the right (design.md § Layout). */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.top-bar a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.top-bar a:hover,
+.top-bar a:focus-visible {
+  color: var(--accent);
+}
+
+/* The explainer page is long text, so it scrolls; each stage gets a fixed height instead of the rest of the screen (D29). */
+body.scrolling {
+  display: block;
+  height: auto;
+}
+
+.explain {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.explain h1 {
+  margin: 32px 0 8px;
+  font-size: 24px;
+}
+
+.explain h2 {
+  margin: 48px 0 8px;
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.explain p {
+  max-width: 75ch;
+  line-height: 1.6;
+}
+
+.explain .running-time {
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+
+.tiny-picture {
+  overflow-x: auto;
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+
+.explain .workspace {
+  height: min(760px, 90vh);
+}
+
+.step-list {
+  max-height: 10em;
+  margin: 0;
+  padding: 8px 16px 8px 4ch;
+  overflow-y: auto;
+  border-top: 1px dashed var(--ink-dim);
+  font-size: 14px;
+}
+
+.step-list button {
+  display: block; /* so each number lines up with its step's first line */
+  text-align: left;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+.step-list button:hover,
+.step-list [aria-current="step"] button {
+  color: var(--accent);
+}

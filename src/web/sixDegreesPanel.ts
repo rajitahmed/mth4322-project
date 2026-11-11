@@ -4,7 +4,7 @@ import { button } from "./button";
 import { createHeading } from "./heading";
 import { createReport, type Report } from "./report";
 import { layoutRings, nearestDot } from "./rings/ringsLayout";
-import { ringsScene } from "./rings/ringsScene";
+import { ringsRunOf, ringsScene } from "./rings/ringsScene";
 import type { Stage } from "./stage/stage";
 import { createUnlinkedList, type FindUnlinked } from "./unlinkedList";
 
@@ -72,10 +72,8 @@ export function createSixDegreesPanel(searchActors: SearchActors, api: SixDegree
   const PICK = "pick an actor, or click a dot on the rings";
   /** Plays the rings around `around`, with `chain` drawn back to the Center when given; `done` fills the report once it ends. */
   const play = (around: LayerSummary, chain: Extract<ChainToCenter, { found: true }> | null, done: () => void) => {
-    const named = chain && { positions: chain.positions, names: chain.actors.map((a) => a.name), movies: chain.movies.map((m) => m.title) };
-    const run = { center: around.center.name, layerCounts: around.layerCounts, unlinkedCount: around.unlinkedCount, chain: named };
     const playing = chain ? `following the chain back to ${around.center.name}…` : "adding the layers…";
-    stage.play(ringsScene(run), (now) => (now ? report.show(playing) : done()));
+    stage.play(ringsScene(ringsRunOf(around, chain)), (now) => (now ? report.show(playing) : done()));
   };
   let listOpen = false;
   const showList = (open: boolean) => {

@@ -8,6 +8,16 @@ import { graphOf } from "./testGraphs";
 const operations = createOperations(buildGraph(loadDataset("data/tiny")));
 const app = buildApp(operations);
 
+describe("/api/tiny", () => {
+  it("serves the same API over a second dataset when one is given, and nothing there otherwise", async () => {
+    const tiny = createOperations(graphOf(2, [[0, 1]]));
+    const both = buildApp(operations, undefined, tiny);
+    expect((await both.inject({ url: "/api/tiny/largest-path" })).json()).toMatchObject({ found: true, distance: 1 });
+    expect((await both.inject({ url: "/api/largest-path" })).json()).toMatchObject({ distance: 7 });
+    expect((await app.inject({ url: "/api/tiny/largest-path" })).statusCode).toBe(404);
+  });
+});
+
 describe("GET /api/actors/random", () => {
   it("returns `count` distinct Actors", async () => {
     const response = await app.inject({ url: "/api/actors/random?count=4" });

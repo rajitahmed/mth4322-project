@@ -28,8 +28,9 @@ function notPossibleText(cycle: Extract<ShortestCycle, { outcome: "not-possible"
 }
 
 /**
- * Tab 2: the heading; 3 actor fields, `[add actor]` up to 6 and `[remove actor]` down to 3, `[random]`
- * (a random number of random Actors, searched at once) and `[enter]`; then the stage beside the report
+ * Tab 2: the heading; 3 actor fields, `[add actor]` up to 6 and `[remove actor]` down to 3,
+ * `random: [any] [3] [4] [5] [6]` (that many random Actors, or a random number of them, searched at
+ * once) and `[enter]`; then the stage beside the report
  * (`searching…` while the search runs: it has no time limit). A field never suggests an Actor already
  * picked in another, so the Chosen Actors are always distinct.
  */
@@ -40,14 +41,19 @@ export function createCyclePanel(api: CycleApi, stage: Stage, random: () => numb
   fields.className = "fields";
   const addActor = button("[add actor]");
   const removeActor = button("[remove actor]");
-  const randomButton = button("[random]");
+  const randomChoices = document.createElement("span");
+  randomChoices.className = "choices";
+  const counts = Array.from({ length: MAX_CHOSEN_ACTORS - MIN_CHOSEN_ACTORS + 1 }, (_, i) => MIN_CHOSEN_ACTORS + i);
+  const anyCount = button("[any]");
+  const countButtons = counts.map((count) => button(`[${count}]`));
+  randomChoices.append("random:", anyCount, ...countButtons);
   const enter = button("[enter]");
   const report = createReport();
   const workspace = document.createElement("div");
   workspace.className = "workspace";
   workspace.append(stage.element, report.element);
   element.append(heading.element, fields, workspace);
-  report.show("pick 3 to 6 actors, or try [random]");
+  report.show("pick 3 to 6 actors, or try a random set");
 
   const actorFields: ActorField[] = [];
   const pickedIds = () => new Set(actorFields.map((field) => field.selected()?.id));
@@ -70,7 +76,7 @@ export function createCyclePanel(api: CycleApi, stage: Stage, random: () => numb
     actorFields.pop()!.element.remove();
     fitButtons();
   };
-  fields.append(addActor, removeActor, randomButton, enter);
+  fields.append(addActor, removeActor, randomChoices, enter);
   for (let i = 0; i < MIN_CHOSEN_ACTORS; i++) add();
   addActor.addEventListener("click", add);
   removeActor.addEventListener("click", remove);
@@ -89,14 +95,16 @@ export function createCyclePanel(api: CycleApi, stage: Stage, random: () => numb
     const chosen = actorFields.map((field) => field.selected());
     if (chosen.every((actor) => actor !== null)) void search(chosen as ActorSummary[]);
   });
-  randomButton.addEventListener("click", async () => {
-    const count = MIN_CHOSEN_ACTORS + Math.floor(random() * (MAX_CHOSEN_ACTORS - MIN_CHOSEN_ACTORS + 1));
+  /** Fills `count` fields with random Actors (removing or adding fields to fit) and searches. */
+  const searchRandom = async (count: number) => {
     const picked = await api.randomActors(count).catch(() => null);
     if (!picked) return report.show("search failed, try again");
     while (actorFields.length < picked.length) add();
     while (actorFields.length > picked.length) remove();
     picked.forEach((actor, i) => actorFields[i]!.set(actor));
     void search(picked);
-  });
+  };
+  anyCount.addEventListener("click", () => searchRandom(counts[Math.floor(random() * counts.length)]!));
+  countButtons.forEach((b, i) => b.addEventListener("click", () => searchRandom(counts[i]!)));
   return element;
 }

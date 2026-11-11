@@ -8,7 +8,7 @@
 import { button } from "../button";
 import type { Cell, Grid } from "./charGrid";
 import { type CanvasView, canvasFont, type CellSize, measureCanvas, paintGrid } from "./paintGrid";
-import { nextStepTime, previousStepTime, type Step, stepIndexAt } from "./steps";
+import { type Step, stepEnd, stepIndexAt } from "./steps";
 
 /**
  * An animation: what the stage shows `t` seconds in, on a grid of `columns` × `rows` cells. The run
@@ -52,8 +52,12 @@ function whenShown(element: HTMLElement, callback: () => void): () => void {
   return () => observer.disconnect();
 }
 
-/** A stage; with `reducedMotion` every run skips straight to the scene's finished picture, and nothing moves. */
-export function createStage(reducedMotion: boolean): Stage {
+/**
+ * A stage; with `reducedMotion` every run skips straight to the scene's finished picture, and nothing
+ * moves. A `walkthrough` stage (the explainer page, D29) starts each run paused on its first step and
+ * lists every step under the canvas, the current one marked; clicking a step jumps to it.
+ */
+export function createStage(reducedMotion: boolean, walkthrough = false): Stage {
   const element = document.createElement("section");
   element.className = "stage";
   const caption = document.createElement("p");
@@ -72,7 +76,9 @@ export function createStage(reducedMotion: boolean): Stage {
   bar.append(caption, controls);
   const canvas = document.createElement("canvas");
   canvas.setAttribute("aria-hidden", "true");
-  element.append(bar, canvas);
+  const stepList = document.createElement("ol");
+  stepList.className = "step-list";
+  element.append(bar, canvas, ...(walkthrough ? [stepList] : []));
   for (const b of [back, pause, forward, skip, replay]) b.hidden = true;
 
   let scene: Scene | null = null;
@@ -101,6 +107,19 @@ export function createStage(reducedMotion: boolean): Stage {
     const index = stepIndexAt(scene.steps, t);
     const text = index >= 0 ? `${index + 1}/${scene.steps.length}  ${scene.steps[index]!.text}` : "";
     if (caption.textContent !== text) caption.textContent = text;
+    [...stepList.children].forEach((item, i) => (i === index ? item.setAttribute("aria-current", "step") : item.removeAttribute("aria-current")));
+  };
+  /** The scene's steps as a list, each one a button that jumps to it. */
+  const listSteps = () => {
+    stepList.replaceChildren(
+      ...scene!.steps.map((step, i) => {
+        const item = document.createElement("li");
+        const jump = button(step.text);
+        jump.addEventListener("click", () => showStep(i));
+        item.append(jump);
+        return item;
+      }),
+    );
   };
   const showControls = () => {
     const any = scene !== null;
@@ -146,7 +165,8 @@ export function createStage(reducedMotion: boolean): Stage {
     cancelAnimationFrame(frame);
     measure(); // the stage may have been hidden, or the window resized, since the last run
     playing = false;
-    paused = false;
+    paused = walkthrough && !reducedMotion;
+    if (walkthrough) listSteps();
     seek(reducedMotion ? scene!.duration : 0, true);
     if (!reducedMotion) frame = requestAnimationFrame(tick);
   };
@@ -158,14 +178,14 @@ export function createStage(reducedMotion: boolean): Stage {
     since = null;
     showControls();
   });
-  forward.addEventListener("click", () => {
+  /** Pauses on step `i` with its work drawn (past the last step: the end of the run). */
+  function showStep(i: number): void {
     paused = true;
-    seek(nextStepTime(scene!.steps, t, scene!.duration));
-  });
-  back.addEventListener("click", () => {
-    paused = true;
-    seek(previousStepTime(scene!.steps, Math.min(t, scene!.duration)));
-  });
+    seek(stepEnd(scene!.steps, Math.max(0, i), scene!.duration));
+  }
+  const current = () => stepIndexAt(scene!.steps, Math.min(t, scene!.duration));
+  forward.addEventListener("click", () => showStep(t >= scene!.duration ? scene!.steps.length : current() + 1));
+  back.addEventListener("click", () => showStep(current() - (t >= scene!.duration ? 0 : 1)));
 
   /** Fits the grid to the canvas again and repaints. */
   const refit = () => {

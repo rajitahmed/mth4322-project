@@ -1,39 +1,22 @@
-import {
-  findActorAt,
-  findChainToCenter,
-  findCycle,
-  findLargestPath,
-  findLayers,
-  findPath,
-  findUnlinked,
-  randomActors,
-  searchActors,
-} from "./api";
+import { apiAt } from "./api";
 import { createCyclePanel } from "./cyclePanel";
 import { showEnterScreen } from "./enter/enterScreen";
 import { createPathPanel } from "./pathPanel";
 import { createSixDegreesPanel } from "./sixDegreesPanel";
 import { createStage } from "./stage/stage";
 import { createTabs } from "./tabs";
+import { createTopBar } from "./topBar";
 
-const title = document.createElement("header");
-title.textContent = "MOVIE STATISTICS";
+const api = apiAt("/api");
 
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 void showEnterScreen(document.body, reducedMotion).then(() =>
   document.body.append(
-    title,
+    createTopBar({ text: "[algorithms explained by Claude]", href: "./explain.html" }),
     createTabs([
-      { name: "largest path", panel: createPathPanel({ searchActors, findPath, findLargestPath, randomActors }, createStage(reducedMotion)) },
-      { name: "shortest cycle", panel: createCyclePanel({ searchActors, findCycle, randomActors }, createStage(reducedMotion)) },
-      {
-        name: "six degrees of bacon",
-        panel: createSixDegreesPanel(
-          searchActors,
-          { findLayers, findChain: findChainToCenter, findActorAt, findUnlinked, randomActors },
-          createStage(reducedMotion),
-        ),
-      },
+      { name: "largest path", panel: createPathPanel(api, createStage(reducedMotion)) },
+      { name: "shortest cycle", panel: createCyclePanel(api, createStage(reducedMotion)) },
+      { name: "six degrees of bacon", panel: createSixDegreesPanel(api.searchActors, api, createStage(reducedMotion)) },
     ]),
   ),
 );

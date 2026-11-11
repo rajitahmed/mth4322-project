@@ -78,7 +78,8 @@ marquee gold sparkles. Seven colors. Nothing else.
 - One screen, no page scroll while an animation is playing.
 - Top bar: MOVIE STATISTICS on the left in small text, the 3 tabs in the
   middle as `[ largest path ] [ shortest cycle ] [ six degrees of bacon ]`,
-  and the link to the page which explains the project on the top right.
+  and `[algorithms explained by Claude]` on the top right, the link to the
+  page which explains the algorithms.
 - Under the top bar: the tab's title in 24px (it also names the browser tab,
   for example "six degrees of Kevin Bacon"), one line on what it shows, then
   the actor fields for that tab with `[random]` buttons.
@@ -104,6 +105,17 @@ marquee gold sparkles. Seven colors. Nothing else.
 - Behind it: a slow Halftone dot field in `--ink-dim`. This is the only
   Halftone background on the site; the tabs' stages have none.
 - On enter, the icosahedron dissolves into dots and the tabs appear.
+
+## Algorithms Explained By Claude
+
+- A second page, linked from the top bar, with `[back to movie statistics]`
+  on its top right. It scrolls: it is long text, not an animation.
+- One section per algorithm: the explanation in plain words (75 characters a
+  line at most), its running time in `--ink-dim`, then buttons for friendly
+  cases on the tiny dataset (whose picture heads the page).
+- Each section has its own stage and report. A case starts paused on its
+  first step; every step is listed under the canvas, the current one in
+  `--accent`, and clicking one jumps to it.
 
 ## Animations
 

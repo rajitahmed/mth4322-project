@@ -84,20 +84,27 @@ describe("shortest cycle panel", () => {
     expect(button("[add actor]").disabled).toBe(false);
   });
 
-  it("[random] picks a random number of random Actors, fills that many fields, and searches at once", async () => {
+  it("random [any] picks a random number of random Actors, fills that many fields, and searches at once", async () => {
     const { inputs, enter, randomActors, findCycle } = setup(found, () => 0.99);
-    await enter("[random]");
+    await enter("[any]");
     expect(randomActors).toHaveBeenCalledWith(6);
     expect(inputs().map((i) => i.value)).toEqual(actors.slice(0, 6).map((a) => `${a.name} (${a.birthYear})`));
     expect(findCycle).toHaveBeenCalledWith(["nm0", "nm1", "nm2", "nm3", "nm4", "nm5"]);
   });
 
-  it("[random] can take as few as 3, removing extra fields", async () => {
+  it("random [any] can take as few as 3, removing extra fields", async () => {
     const { inputs, button, enter, randomActors } = setup(found, () => 0);
     button("[add actor]").click();
-    await enter("[random]");
+    await enter("[any]");
     expect(randomActors).toHaveBeenCalledWith(3);
     expect(inputs()).toHaveLength(3);
+  });
+
+  it.each([3, 4, 5, 6])("random [%i] picks exactly that many Actors", async (count) => {
+    const { inputs, enter, randomActors } = setup(found, () => 0);
+    await enter(`[${count}]`);
+    expect(randomActors).toHaveBeenCalledWith(count);
+    expect(inputs()).toHaveLength(count);
   });
 
   it("does not suggest an Actor already picked in another field", async () => {
@@ -115,7 +122,7 @@ describe("shortest cycle panel", () => {
     await pick(1, "ben");
     button("[enter]").click();
     expect(findCycle).not.toHaveBeenCalled();
-    expect(result().textContent).toBe("pick 3 to 6 actors, or try [random]");
+    expect(result().textContent).toBe("pick 3 to 6 actors, or try a random set");
   });
 
   it("shows a fully red reason when the Actors are in different Groups", async () => {

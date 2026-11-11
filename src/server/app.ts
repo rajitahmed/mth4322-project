@@ -1,5 +1,5 @@
 import fastifyStatic from "@fastify/static";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import { CHAIN_MODES, type ChainMode, MAX_CHOSEN_ACTORS, MAX_RANDOM_ACTORS, MIN_CHOSEN_ACTORS } from "../shared/types";
 import {
   DEFAULT_PAGE_SIZE,
@@ -13,16 +13,27 @@ import {
 /** The optional Center id every Six Degrees route takes (the default Center when missing). */
 const centerSchema = { type: "string" } as const;
 
-/** The HTTP API over the operations module, plus the built web app when webDir is given. */
-export function buildApp(operations: Operations, webDir?: string) {
+/**
+ * The HTTP API over the operations module at `/api`, the same API over the tiny dataset at `/api/tiny`
+ * when `tiny` is given (the explainer page's friendly cases, D29), plus the built web app when webDir is given.
+ */
+export function buildApp(operations: Operations, webDir?: string, tiny?: Operations) {
   const app = Fastify();
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof UnknownActorError) return reply.code(404).send({ error: error.message });
     return reply.send(error);
   });
 
-  app.get<{ Querystring: { q: string; limit: number } }>(
-    "/api/actors",
+  app.register(async (api) => routes(api, operations), { prefix: "/api" });
+  if (tiny) app.register(async (api) => routes(api, tiny), { prefix: "/api/tiny" });
+  if (webDir) app.register(fastifyStatic, { root: webDir });
+  return app;
+}
+
+/** Every API route over one operations module. */
+function routes(api: FastifyInstance, operations: Operations): void {
+  api.get<{ Querystring: { q: string; limit: number } }>(
+    "/actors",
     {
       schema: {
         querystring: {
@@ -38,8 +49,8 @@ export function buildApp(operations: Operations, webDir?: string) {
     async (request) => operations.searchActors(request.query.q, request.query.limit),
   );
 
-  app.get<{ Querystring: { count: number } }>(
-    "/api/actors/random",
+  api.get<{ Querystring: { count: number } }>(
+    "/actors/random",
     {
       schema: {
         querystring: {
@@ -51,8 +62,8 @@ export function buildApp(operations: Operations, webDir?: string) {
     async (request) => operations.randomActors(request.query.count),
   );
 
-  app.get<{ Querystring: { a: string; b: string } }>(
-    "/api/path",
+  api.get<{ Querystring: { a: string; b: string } }>(
+    "/path",
     {
       schema: {
         querystring: {
@@ -65,10 +76,10 @@ export function buildApp(operations: Operations, webDir?: string) {
     async (request) => operations.shortestPath(request.query.a, request.query.b),
   );
 
-  app.get("/api/largest-path", async () => operations.largestPath());
+  api.get("/largest-path", async () => operations.largestPath());
 
-  app.get<{ Querystring: { actors: string[] } }>(
-    "/api/cycle",
+  api.get<{ Querystring: { actors: string[] } }>(
+    "/cycle",
     {
       schema: {
         querystring: {
@@ -89,14 +100,14 @@ export function buildApp(operations: Operations, webDir?: string) {
     async (request) => operations.shortestCycle(request.query.actors),
   );
 
-  app.get<{ Querystring: { center?: string } }>(
-    "/api/six-degrees",
+  api.get<{ Querystring: { center?: string } }>(
+    "/six-degrees",
     { schema: { querystring: { type: "object", properties: { center: centerSchema } } } },
     async (request) => operations.layerSummary(request.query.center),
   );
 
-  app.get<{ Querystring: { center?: string; actor: string; mode: ChainMode } }>(
-    "/api/six-degrees/chain",
+  api.get<{ Querystring: { center?: string; actor: string; mode: ChainMode } }>(
+    "/six-degrees/chain",
     {
       schema: {
         querystring: {
@@ -113,8 +124,8 @@ export function buildApp(operations: Operations, webDir?: string) {
     async ({ query }) => operations.chainToCenter(query.center, query.actor, query.mode),
   );
 
-  app.get<{ Querystring: { center?: string; layer: number; position: number } }>(
-    "/api/six-degrees/layer-actor",
+  api.get<{ Querystring: { center?: string; layer: number; position: number } }>(
+    "/six-degrees/layer-actor",
     {
       schema: {
         querystring: {
@@ -134,8 +145,8 @@ export function buildApp(operations: Operations, webDir?: string) {
     },
   );
 
-  app.get<{ Querystring: { center?: string; q: string; offset: number; limit: number } }>(
-    "/api/six-degrees/unlinked",
+  api.get<{ Querystring: { center?: string; q: string; offset: number; limit: number } }>(
+    "/six-degrees/unlinked",
     {
       schema: {
         querystring: {
@@ -151,7 +162,4 @@ export function buildApp(operations: Operations, webDir?: string) {
     },
     async ({ query }) => operations.unlinked(query.center, query.q, query.offset, query.limit),
   );
-
-  if (webDir) app.register(fastifyStatic, { root: webDir });
-  return app;
 }

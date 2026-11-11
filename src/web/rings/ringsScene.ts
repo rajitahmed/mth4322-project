@@ -7,6 +7,7 @@
  * solid, Link by Link, each Actor named as it is reached, then the gold flash and sparkles off both ends,
  * and a spark keeps running down the chain.
  */
+import type { ChainToCenter, LayerSummary } from "../../shared/types";
 import { count, links } from "../format";
 import { CELL_ASPECT, createGrid, drawLine, type Grid, setCell, writeLabel, writeText } from "../stage/charGrid";
 import { answerInk, clamp, drawPulse, drawSparkles, FLASH, growLine, SPARKLE } from "../stage/linkMarks";
@@ -23,11 +24,23 @@ export interface RingsRun {
   chain: { positions: number[]; names: string[]; movies: string[] } | null;
 }
 
+/** The run for a Center's Layers, with `chain` (a found chain to a picked Actor) drawn back to it when given. */
+export function ringsRunOf(around: LayerSummary, chain: Extract<ChainToCenter, { found: true }> | null): RingsRun {
+  return {
+    center: around.center.name,
+    layerCounts: around.layerCounts,
+    unlinkedCount: around.unlinkedCount,
+    chain: chain && { positions: chain.positions, names: chain.actors.map((a) => a.name), movies: chain.movies.map((m) => m.title) },
+  };
+}
+
 /** Seconds per Layer, with the whole window kept to MIN–MAX_RINGS, then HOLD on the finished picture: 5 to 15 seconds. */
 const PER_LAYER = 1;
 const MIN_RINGS = 4;
 const MAX_RINGS = 12;
 const HOLD = 1;
+/** The first step (the Center alone) is told for INTRO seconds before anything is drawn, so every step has its own moment. */
+const INTRO = 1;
 /** A ring is swept in this share of its Layer's slot; the rest is a pause before the next. */
 const SWEEP_SHARE = 0.7;
 /** Seconds per chain Link, with the whole chain kept to MIN–MAX_CHAIN. */
@@ -76,10 +89,10 @@ function growingRings(run: RingsRun, layoutFor: (columns: number, rows: number) 
   const last = run.layerCounts.length - 1;
   const slot = last === 0 ? 0 : clamp(last * PER_LAYER, MIN_RINGS, MAX_RINGS) / last;
   const sweep = slot * SWEEP_SHARE;
-  const duration = last * slot + HOLD;
+  const duration = INTRO + last * slot + HOLD;
   const steps: Step[] = [{ at: 0, text: `${run.center} is layer 0: every other actor goes in the layer of their distance from ${run.center}` }];
-  run.layerCounts.slice(1).forEach((n, i) => steps.push({ at: i * slot, text: `layer ${i + 1}: ${count(n)} actors are ${links(i + 1)} from ${run.center}` }));
-  steps.push({ at: last * slot, text: `${count(run.unlinkedCount)} actors can't be linked to ${run.center}: they are in another group` });
+  run.layerCounts.slice(1).forEach((n, i) => steps.push({ at: INTRO + i * slot, text: `layer ${i + 1}: ${count(n)} actors are ${links(i + 1)} from ${run.center}` }));
+  steps.push({ at: INTRO + last * slot, text: `${count(run.unlinkedCount)} actors can't be linked to ${run.center}: they are in another group` });
   return {
     duration,
     steps,
@@ -89,7 +102,7 @@ function growingRings(run: RingsRun, layoutFor: (columns: number, rows: number) 
       if (t > duration) drawSweep(grid, layout, t - duration);
       const shown = (layer: number) => {
         const dots = layout.rings[layer]!.dots.length;
-        return clamp(Math.floor(((t - (layer - 1) * slot) / sweep) * dots), 0, dots);
+        return clamp(Math.floor(((t - INTRO - (layer - 1) * slot) / sweep) * dots), 0, dots);
       };
       drawRings(grid, layout, shown);
       drawCenter(grid, layout, run.center);
@@ -109,16 +122,17 @@ function drawSweep(grid: Grid, { center, radius }: RingsLayout, t: number): void
 function chainScene(run: RingsRun, chain: NonNullable<RingsRun["chain"]>, layoutFor: (columns: number, rows: number) => RingsLayout): Scene {
   const { positions, names, movies } = chain;
   const linkCount = positions.length - 1;
-  const settled = linkCount === 0 ? 0 : clamp(linkCount * PER_LINK, MIN_CHAIN, MAX_CHAIN);
-  const slot = linkCount === 0 ? 0 : settled / linkCount;
+  const linking = linkCount === 0 ? 0 : clamp(linkCount * PER_LINK, MIN_CHAIN, MAX_CHAIN);
+  const slot = linkCount === 0 ? 0 : linking / linkCount;
+  const settled = INTRO + linking;
   const duration = settled + FLASH + SPARKLE;
   /** How far the k-th Link drawn (from chain Actor linkCount − k to linkCount − k − 1) is at `t` (0 to 1). */
-  const drawn = (k: number, t: number) => clamp((t - k * slot) / slot, 0, 1);
+  const drawn = (k: number, t: number) => clamp((t - INTRO - k * slot) / slot, 0, 1);
   const picked = names[linkCount]!;
   const steps: Step[] = [{ at: 0, text: `${picked} is in layer ${linkCount}: follow the chain back to ${run.center}` }];
   for (let k = 0; k < linkCount; k++) {
     const [from, to] = [linkCount - k, linkCount - k - 1];
-    steps.push({ at: k * slot, text: `${names[from]} → ${names[to]} (${movies[to]}), layer ${from} to ${to}` });
+    steps.push({ at: INTRO + k * slot, text: `${names[from]} → ${names[to]} (${movies[to]}), layer ${from} to ${to}` });
   }
   steps.push({ at: settled, text: `${run.center} reached: ${picked} is ${links(linkCount)} away` });
   return {
