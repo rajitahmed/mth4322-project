@@ -668,3 +668,14 @@ Algorithmic decisions for the 3 operations and the data filter, in chronological
   - **The enter-screen title scales with the icosahedron**: a 5 × 7 dot font scaled by nearest neighbour when it fits at one row per dot or more, else FIGlet, else plain text. Cells next to a letter are cleared so the wireframe never touches it.
   - **Bug fix:** tab 3's mode buttons now close the can't-be-linked list (they returned early when the mode was already selected).
 - **Running time:** `showRounds` is O(L) over the L Links explored, as is the round recording; the search itself is unchanged (D16). `randomActors(k)` is O(A) to copy the pool plus O(k). Each animation frame is O(cells + shown Links).
+
+## D28: A see-through enter-screen title, drawn inside the solid (enter screen)
+
+- **Date:** 2026-11-10
+- **Decision:** The wireframe is drawn in two layers: hidden (back) edges, then the title, then the near (front) edges over it, so the title sits inside the icosahedron. Only the title's letters are drawn: the halftone shows between them. Letters rest in `--ink-dim` and a band of `--ink` sweeps across them every 4 seconds; on hover the whole title is `--accent`.
+- **Alternatives considered:**
+  - D27's blank halo around every letter. Rejected by the user: it read as an opaque button pasted over the shape.
+  - Letters in full `--ink`, drawn on top of every edge (before D27). Rejected the same way: nothing put the title in the solid.
+  - Squeezing the title in time with the spin. Rejected: resampling FIGlet columns drops strokes and the letters jitter.
+- **Why:** depth (front edges cross the letters, back edges pass behind) and see-through letters make the title part of the shape; the moving shine keeps it alive and still marks it as the thing to click.
+- **Running time:** O(cells) per frame, as before.

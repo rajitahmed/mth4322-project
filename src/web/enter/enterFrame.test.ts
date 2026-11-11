@@ -14,20 +14,34 @@ describe("enter frame", () => {
   it("draws MOVIE STATISTICS in the middle, inside the icosahedron, over the halftone field", () => {
     const grid = frame(1);
     const screen = text(grid);
-    expect(screen).toContain("|____/   |_|  /_/   \\_\\");
+    // The FIGlet letters, centred; near edges may run over a few of them.
+    const title = bigText(["MOVIE", "STATISTICS"]);
+    const { cx, cy } = stageLayout(W, H, ASPECT);
+    const [top, left] = [cy - Math.floor(title.length / 2), cx - Math.floor(title[0]!.length / 2)];
+    const letters = title.flatMap((row, i) => [...row].flatMap((c, j) => (c === " " ? [] : [{ c, i: (top + i) * W + left + j }])));
+    expect(letters.filter(({ c, i }) => grid.chars[i] === c).length / letters.length).toBeGreaterThan(0.9);
     expect(screen).toMatch(/[·•●]/);
     expect(screen).toMatch(/[:.']/); // hidden edges, dotted
-    const { cx, cy } = stageLayout(W, H, ASPECT);
-    const titleRow = rowText(grid, Math.round(cy));
-    expect(titleRow.slice(cx - 10, cx + 10).trim()).toBe(""); // the blank row between the two words
   });
 
   it("colors the edges ink, hidden edges and dots ink-dim, and the title accent on hover", () => {
     const inks = (grid: ReturnType<typeof frame>, glyph: string) =>
       new Set(grid.inks.filter((_, i) => grid.chars[i] === glyph));
     expect(inks(frame(1), "●")).toEqual(new Set(["ink-dim"]));
-    expect(inks(frame(1), "V")).toEqual(new Set(["ink"]));
     expect(inks(frame(1, { hover: true }), "V")).toEqual(new Set(["accent"]));
+  });
+
+  it("leaves the title see-through: dim letters with a moving shine, and the halftone between them", () => {
+    const { cx, cy } = stageLayout(W, H, ASPECT);
+    const inTitle = (i: number) => Math.abs((i % W) - cx) < 30 && Math.abs(Math.floor(i / W) - cy) < 5;
+    const vInks = (t: number) => {
+      const grid = frame(t);
+      return grid.inks.flatMap((ink, i) => (inTitle(i) && grid.chars[i] === "V" ? [ink] : []));
+    };
+    expect(vInks(1).filter((ink) => ink === "ink-dim").length).toBeGreaterThan(0); // resting letters are dim
+    const litAt = (t: number) => vInks(t).join();
+    expect(new Set([0.4, 1.2, 2, 2.8].map(litAt)).size).toBeGreaterThan(1); // the shine moves
+    expect(frame(1).chars.some((c, i) => inTitle(i) && "·•●".includes(c))).toBe(true); // halftone shows through
   });
 
   it("turns the icosahedron at 30 fps: frames inside the same 1/30 s look the same", () => {

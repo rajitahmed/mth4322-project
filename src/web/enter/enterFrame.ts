@@ -17,6 +17,9 @@ const DOT_FONT = dotText(WORDS);
 /** The title's box inside the icosahedron, as shares of its radius: wide, and not quite as tall as the solid. */
 const TITLE_WIDTH = 1.5;
 const TITLE_HEIGHT = 0.9;
+/** The shine across the title: one pass every SHINE_PERIOD seconds, its band SHINE_WIDTH of the title's width either side. */
+const SHINE_PERIOD = 4;
+const SHINE_WIDTH = 0.12;
 
 export interface StageLayout {
   cx: number;
@@ -35,13 +38,13 @@ export function isOnIcosahedron(width: number, height: number, aspect: number, x
   return Math.hypot((x - cx) / aspect, y - cy) <= radius;
 }
 
-function drawIcosahedron(grid: Grid, aspect: number, t: number): void {
+/** One layer of the wireframe: the hidden (back) edges, dotted, or the near (front) edges, solid. */
+function drawIcosahedron(grid: Grid, aspect: number, t: number, layer: "back" | "front"): void {
   const { cx, cy, radius } = stageLayout(grid.width, grid.height, aspect);
   const angle = (Math.floor(t * ICOSAHEDRON_FPS) / ICOSAHEDRON_FPS) * SPIN;
   const cell = ([x, y]: Point) => [cx + x * radius * aspect, cy - y * radius] as const;
-  const edges = viewEdges(angle).sort((a, b) => Number(b.hidden) - Number(a.hidden)); // near edges drawn last, on top
-  for (const { from, to, hidden } of edges) {
-    drawLine(grid, ...cell(from), ...cell(to), hidden ? "ink-dim" : "ink", hidden);
+  for (const { from, to, hidden } of viewEdges(angle)) {
+    if (hidden === (layer === "back")) drawLine(grid, ...cell(from), ...cell(to), hidden ? "ink-dim" : "ink", hidden);
   }
 }
 
@@ -60,27 +63,37 @@ export function titleRows(width: number, height: number, aspect: number): string
 }
 
 /**
- * The title in the middle of the icosahedron. Cells next to a letter are cleared, so the
- * wireframe never runs into the letters: they read as set into the solid, not pasted over it.
+ * The title in the middle of the icosahedron, see-through (D28): only its letters are drawn, so the
+ * halftone shows between them, and they rest in ink-dim with a band of ink sweeping across them in
+ * time with the spin. On hover the whole title is accent.
  */
-function drawTitle(grid: Grid, aspect: number, hover: boolean): void {
+function drawTitle(grid: Grid, aspect: number, t: number, hover: boolean): void {
   const { cx, cy } = stageLayout(grid.width, grid.height, aspect);
   const rows = titleRows(grid.width, grid.height, aspect);
   const top = cy - Math.floor(rows.length / 2);
-  const glyphs = rows.flatMap((row, i) =>
-    [...row].flatMap((char, j) => (char === " " ? [] : [{ x: cx - Math.floor(row.length / 2) + j, y: top + i, char }])),
-  );
-  for (const { x, y } of glyphs) for (const dx of [-1, 0, 1]) for (const dy of [-1, 0, 1]) setCell(grid, x + dx, y + dy, " ", "ink");
-  for (const { x, y, char } of glyphs) setCell(grid, x, y, char, hover ? "accent" : "ink");
+  const width = Math.max(...rows.map((row) => row.length));
+  const left = cx - Math.floor(width / 2);
+  /** Where the band is, as a share of the title's width; it runs from just off the left to just off the right. */
+  const band = ((t / SHINE_PERIOD) % 1) * (1 + 2 * SHINE_WIDTH) - SHINE_WIDTH;
+  rows.forEach((row, i) => {
+    const offset = left + Math.floor((width - row.length) / 2);
+    [...row].forEach((char, j) => {
+      if (char === " ") return;
+      const lit = Math.abs((offset + j - left) / width - band) < SHINE_WIDTH;
+      setCell(grid, offset + j, top + i, char, hover ? "accent" : lit ? "ink" : "ink-dim");
+    });
+  });
 }
 
 /**
  * The frame at time `t` seconds. `dissolve` runs from 0 (whole) to 1 (only the halftone field is left).
  */
 export function composeFrame(width: number, height: number, aspect: number, t: number, hover: boolean, dissolve: number): Grid {
+  // Back edges, then the title, then the near edges over it: the title sits inside the solid.
   const front = createGrid(width, height, "");
-  drawIcosahedron(front, aspect, t);
-  drawTitle(front, aspect, hover);
+  drawIcosahedron(front, aspect, t, "back");
+  drawTitle(front, aspect, t, hover);
+  drawIcosahedron(front, aspect, t, "front");
 
   for (let i = 0; i < front.chars.length; i++) {
     if (front.chars[i] !== "") front.chars[i] = dissolved(front.chars[i]!, i, dissolve);
