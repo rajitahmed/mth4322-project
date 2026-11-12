@@ -866,3 +866,28 @@ A chronological log of how this application is being built. There is one entry p
   - Clicked through the page in Chrome on port 3001.
   - The explainer test answers Cycle requests itself: the Cycle worker can't start under happy-dom, and the server's tests cover that route.
 - **Verified:** `npm run typecheck` clean, `npm test` passes, `npm run build` OK.
+
+## 2026-11-11: Ticket #14, deploy to Render and validate
+
+- **Asked:** `/implement` ticket #14: deploy to Render's free tier, check memory and startup there, check Render's request timeout against the slowest Cycle searches, and add the README note about sleeping.
+- **Done:**
+  - `render.yaml`, a Blueprint for one free web service (`npm ci && npm run build`, then `npm start`).
+  - Node pinned to `>=24 <27` in `package.json`.
+  - README: a Deploy section with the 15-minute sleep and the ~1-minute wake ("open it a few minutes before presenting"), and the memory and startup numbers updated.
+  - ADR 0003 (hosting), and DECISIONS D30 (keep the Cycle worker).
+- **Decided:**
+  - **Render's request limit is 100 minutes.** The slowest Cycle search measured is 5.8 s, so the worker stays and there is no background job (D30).
+  - **Memory:** rerun on Node 26, the uncapped startup peak reached 524 MB, over 512. So `render.yaml` sets `NODE_OPTIONS=--max-old-space-size=200`. Peak 395–484 MB over 8 runs, with all tabs working and 3 Cycle searches at once. A 160 MB cap gives 334–384 MB and is the fallback; 128 MB runs out of heap (ADR 0003). This supersedes D26's expectation.
+- **Not done (needs the user's Render account, which the agent doesn't have):** the deploy itself, and the checks on Render (memory and startup in the log, all 3 tabs on the live URL, wake time). D30 lists them.
+- **Code review (`/code-review`, two parallel reviewers):**
+  - Fixed:
+    - The hosting decisions moved from DECISIONS.md to ADR 0003 (domain.md: hosting goes in `docs/adr/`).
+    - The stale README numbers (~16 s, 440–470 MB) now match Node 26.
+    - D30 now says it supersedes part of D26.
+    - The cap was retested with concurrent Cycle searches, and over more runs.
+    - A source was added for the sleep and wake times.
+  - Kept: the Node `engines` pin, because the memory numbers depend on the Node version.
+- **Verified:**
+  - `npm run typecheck` is clean, and `npm test` passes (317).
+  - `npm run build` works, both with and without the cap.
+  - The server on `PORT=10000` answers every tab on the real data.

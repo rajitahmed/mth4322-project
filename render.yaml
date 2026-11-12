@@ -1,0 +1,12 @@
+# Render Blueprint: one free web service over the committed real data (docs/adr/0003).
+services:
+  - type: web
+    name: movie-statistics
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      # Keeps the startup peak under the free plan's 512 MB (docs/adr/0003).
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=200

@@ -694,3 +694,20 @@ Algorithmic decisions for the 3 operations and the data filter, in chronological
   - **Stepping stops at a step's end, not its start** (`stepEnd`): just before the next step begins, so the picture shows what that step did. Every scene now gives each step its own moment, which a test checks for every scene kind. This needed a 1 s intro in tab 3's scenes and a slot for "search for the shortest cycle" in tab 2.
   - **Tab 2's random set:** `random: [any] [3] [4] [5] [6]`. `[any]` picks the count; a number picks that many.
 - **Running time:** the tiny dataset adds O(17 + 16 + 33) work and memory at startup, which is negligible. The algorithms are unchanged.
+
+## D30: Render allows 100 minutes per HTTP request, so the Cycle search stays on its own worker thread (operation 2, ticket #14)
+
+- **Date:** 2026-11-11
+- **Decision:** keep D9 and D21 as they are. Each Cycle search is still one HTTP request, answered by its own worker thread. No background job with polling.
+- **Render's timeout:** a single HTTP request on Render may take **up to 100 minutes** ([Render vs Heroku](https://render.com/docs/heroku); Render's streaming article gives the same figure). It can't be configured, and the free plan has the same limit.
+- **Our worst case:**
+  - The slowest Cycle search measured on the real data took **5.8 s**: one of five random triples of mostly obscure Actors, which rejected 15.6 million branches (D21).
+  - Famous Actors took 0.2–0.7 s (D21, D26). With the heap capped for Render (ADR 0003), four rounds of 3 searches at once took 0.44–0.52 s each.
+  - That is about 1,000× under the limit. Render's free plan has a smaller CPU than the laptop these were measured on, but even 50× slower, the worst search takes ~5 minutes.
+- **Alternatives considered:**
+  - **A background job with polling** (D9's upgrade path). Rejected: it adds a job id, a polling endpoint and cleanup to fix a limit we don't hit (YAGNI). A browser gives up long before 100 minutes anyway, so a search that slow couldn't be shown under either design.
+  - **Capping the search time.** Rejected: the brief asks for no limit (D9).
+- **D21's known gaps stay as they are:** a search keeps running after the browser leaves, and nothing limits how many workers run at once. With the slowest search taking seconds, neither matters for this site.
+- **Supersedes part of D26:** D26 expected Render's memory peak to sit at or below the local one. On Node 26 the uncapped local peak reached 524 MB, so the heap is now capped on Render (ADR 0003).
+- **Running time:** unchanged (D21).
+- **To check on Render once deployed:** startup time and peak memory from the deploy log (compare with ADR 0003), all 3 tabs on the live URL, and the wake-up time after sleeping.
